@@ -1,6 +1,6 @@
 import { Markdown } from "@opencode-ai/session-ui/markdown"
 import { createAutoScroll } from "@opencode-ai/ui/hooks"
-import { For, Show, createEffect, createMemo, on, type JSX } from "solid-js"
+import { For, Index, Show, createEffect, createMemo, on, type JSX } from "solid-js"
 import type { AgentNodeStatus, OverviewConversationTurn } from "../agent-workbench/model"
 import { AgentAvatar, StatusBadge } from "../deeptrading/deeptrading-session-view"
 import { zhengqiAvatar, zhengqiTeamAvatar } from "./config"
@@ -175,28 +175,28 @@ function OverviewConversation(props: {
       }
     >
       <div class="space-y-5">
-        <For each={props.turns}>
+        <Index each={props.turns}>
           {(turn, index) => (
             <>
-              <Show when={index() > 0}>
+              <Show when={index > 0}>
                 <div class="flex justify-end">
                   <div class="max-w-[78%] whitespace-pre-wrap rounded-[8px] bg-[#e9ecf3] px-4 py-3 text-[14px] leading-6 text-[#323949]">
-                    {turn.query}
+                    {turn().query}
                   </div>
                 </div>
               </Show>
-              <Show when={turn.markdown}>
+              <Show when={turn().markdown}>
                 {(markdown) => (
                   <MarkdownPanel
                     text={markdown()}
-                    cacheKey={`${props.rootSessionId}:overview:${turn.id}`}
-                    streaming={props.status === "running" && index() === props.turns.length - 1}
+                    cacheKey={`${props.rootSessionId}:overview:${turn().id}`}
+                    streaming={props.status === "running" && index === props.turns.length - 1}
                   />
                 )}
               </Show>
             </>
           )}
-        </For>
+        </Index>
       </div>
     </Show>
   )
@@ -232,7 +232,7 @@ function AgentStrip() {
     <div class="pointer-events-none absolute inset-x-0 bottom-3 z-20 flex justify-center px-4">
       <nav
         aria-label="政企谈参团队"
-        class="deeptrading-scrollbar pointer-events-auto flex max-w-full gap-1.5 overflow-x-auto rounded-[8px] border border-[#dfe3eb] bg-white/95 p-2 shadow-[0_10px_30px_rgba(29,38,61,0.14)] backdrop-blur"
+        class="deeptrading-scrollbar pointer-events-auto flex max-w-full gap-1.5 overflow-x-auto rounded-[8px] border border-[#dfe3eb] bg-[#f7f8fb] p-2 shadow-[0_10px_30px_rgba(29,38,61,0.14)]"
       >
         <For each={items()}>
           {(item) => (

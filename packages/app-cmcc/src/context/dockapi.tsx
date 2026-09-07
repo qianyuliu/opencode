@@ -514,6 +514,9 @@ export const { use: useDockApi, provider: DockApiProvider } = createSimpleContex
             { method: "POST", body: form },
           )
         },
+        remove(caseCode: string) {
+          return request<void>(`/api/dockapi/cases/${encodeURIComponent(caseCode)}`, { method: "DELETE" })
+        },
         previewTicket(caseCode: string) {
           return request<DockApiCasePreviewTicket>(
             `/api/dockapi/cases/${encodeURIComponent(caseCode)}/preview-ticket`,

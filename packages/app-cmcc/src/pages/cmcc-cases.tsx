@@ -4,13 +4,14 @@ import { createStore } from "solid-js/store"
 import { useNavigate } from "@solidjs/router"
 import type { DockApiCaseGroup, DockApiCaseSummary } from "@/context/dockapi"
 import { dockApiUrl, useDockApi } from "@/context/dockapi"
+import { CaseDeleteDialog } from "@/components/case-delete-dialog"
 import {
   CMCC_CASES_UPDATED_EVENT,
   CMCC_CASE_CATEGORIES,
   cmccCaseCategoryByCode,
+  cmccCaseManagementAllowed,
   formatCaseCharacterCount,
 } from "@/utils/cmcc-cases"
-import { showToast } from "@/utils/toast"
 import caseCategoryAssetsUrl from "@/assets/cases/case-category-assets.svg?url"
 
 type SortOrder = "latest" | "oldest"
@@ -43,6 +44,7 @@ export function CmccCasesRoute() {
     from: "",
     to: "",
     filterOpen: false,
+    deleteCase: undefined as DockApiCaseSummary | undefined,
   })
   let generation = 0
   let sentinel: HTMLDivElement | undefined
@@ -143,6 +145,8 @@ export function CmccCasesRoute() {
 
   const hasCases = () =>
     filtered() ? state.items.length > 0 : state.overview.some((group) => group.items.length > 0)
+  const canManageCases = () => cmccCaseManagementAllowed(dockapi.user?.casePublishAllowed)
+  const requestDelete = (value: DockApiCaseSummary) => setState("deleteCase", value)
 
   return (
     <main class="relative size-full overflow-x-hidden overflow-y-auto bg-[#fbfcff]" data-page="cmcc-cases">
@@ -232,13 +236,22 @@ export function CmccCasesRoute() {
         <Show when={!state.loading && !state.error && hasCases()}>
           <Show when={!filtered()} fallback={
             <section class="mt-7 grid grid-cols-4 gap-x-4 gap-y-6 max-lg:grid-cols-3 max-md:grid-cols-2 max-sm:grid-cols-1">
-              <For each={state.items}>{(item) => <CaseCard item={item} onClick={() => navigate(`/cases/${item.caseCode}`)} />}</For>
+              <For each={state.items}>
+                {(item) => (
+                  <CaseCard
+                    item={item}
+                    onClick={() => navigate(`/cases/${item.caseCode}`)}
+                    onDelete={canManageCases() ? () => requestDelete(item) : undefined}
+                  />
+                )}
+              </For>
             </section>
           }>
             <OverviewGroups
               groups={state.overview}
               open={(item) => navigate(`/cases/${item.caseCode}`)}
               viewMore={(category) => setState("category", category)}
+              remove={canManageCases() ? requestDelete : undefined}
             />
           </Show>
           <div ref={(element) => { sentinel = element; observer?.observe(element) }} class="h-px" />
@@ -247,6 +260,14 @@ export function CmccCasesRoute() {
           </Show>
         </Show>
       </div>
+      <CaseDeleteDialog
+        value={state.deleteCase}
+        onClose={() => setState("deleteCase", undefined)}
+        onDeleted={() => {
+          setState("deleteCase", undefined)
+          window.dispatchEvent(new Event(CMCC_CASES_UPDATED_EVENT))
+        }}
+      />
     </main>
   )
 }
@@ -255,6 +276,7 @@ function OverviewGroups(props: {
   groups: DockApiCaseGroup[]
   open: (item: DockApiCaseSummary) => void
   viewMore: (category: string) => void
+  remove?: (item: DockApiCaseSummary) => void
 }) {
   const general = () => props.groups.find((group) => group.category === "deep-research")
   const others = () => props.groups.filter((group) => group.category !== "deep-research" && group.items.length)
@@ -274,7 +296,15 @@ function OverviewGroups(props: {
             class="relative z-10 grid grid-flow-col gap-4 px-7 py-5 max-md:grid-flow-row max-md:grid-cols-2 max-sm:grid-cols-1"
             style={{ "grid-auto-columns": "var(--case-card-width)" }}
           >
-            <For each={general()!.items}>{(item) => <CaseCard item={item} onClick={() => props.open(item)} />}</For>
+            <For each={general()!.items}>
+              {(item) => (
+                <CaseCard
+                  item={item}
+                  onClick={() => props.open(item)}
+                  onDelete={props.remove ? () => props.remove?.(item) : undefined}
+                />
+              )}
+            </For>
           </div>
         </section>
       </Show>
@@ -305,7 +335,15 @@ function OverviewGroups(props: {
                       class="mt-2 grid grid-flow-col gap-3 max-sm:grid-flow-row max-sm:grid-cols-1"
                       style={{ "grid-auto-columns": "var(--case-card-width)" }}
                     >
-                      <For each={group.items}>{(item) => <CaseCard item={item} onClick={() => props.open(item)} />}</For>
+                      <For each={group.items}>
+                        {(item) => (
+                          <CaseCard
+                            item={item}
+                            onClick={() => props.open(item)}
+                            onDelete={props.remove ? () => props.remove?.(item) : undefined}
+                          />
+                        )}
+                      </For>
                     </div>
                   </div>
                 </div>
@@ -319,7 +357,7 @@ function OverviewGroups(props: {
 }
 
 function CaseCategoryBackground(props: { category: string }) {
-  const artwork = () => CASE_CATEGORY_ARTWORK[props.category] ?? CASE_CATEGORY_ARTWORK["deep-research"]!
+  const artwork = () => CASE_CATEGORY_ARTWORK[props.category] ?? CASE_CATEGORY_ARTWORK["deep-research"]
   return (
     <svg
       aria-hidden="true"
@@ -358,34 +396,53 @@ function CaseSectionHeading(props: { category: string }) {
   )
 }
 
-function CaseCard(props: { item: DockApiCaseSummary; onClick: () => void }) {
+function CaseCard(props: { item: DockApiCaseSummary; onClick: () => void; onDelete?: () => void }) {
   const [state, setState] = createStore({ coverFailed: false })
   return (
-    <button type="button" class="group min-w-0 text-left" onClick={props.onClick}>
-      <div class="overflow-hidden rounded-[8px] border border-[#e9edf5] bg-white shadow-[0_4px_12px_rgba(61,77,112,0.08)] transition-[transform,box-shadow] duration-150 group-hover:-translate-y-0.5 group-hover:shadow-[0_8px_18px_rgba(61,77,112,0.13)]">
-        <div class="line-clamp-2 min-h-[48px] px-3.5 pb-2 pt-3 text-[14px] font-medium leading-5 text-[#333b4e]">
-          {props.item.caseName}
+    <div class="group relative min-w-0 text-left">
+      <button type="button" class="block w-full text-left" onClick={props.onClick}>
+        <div class="overflow-hidden rounded-[8px] border border-[#e9edf5] bg-white shadow-[0_4px_12px_rgba(61,77,112,0.08)] transition-[transform,box-shadow] duration-150 group-hover:-translate-y-0.5 group-hover:shadow-[0_8px_18px_rgba(61,77,112,0.13)]">
+          <div
+            class="line-clamp-2 min-h-[48px] px-3.5 pb-2 pt-3 text-[14px] font-medium leading-5 text-[#333b4e]"
+            classList={{ "pr-11": !!props.onDelete }}
+          >
+            {props.item.caseName}
+          </div>
+          <div class="relative aspect-[1.8] overflow-hidden bg-[#eef4ff]">
+            <Show when={props.item.coverUrl && !state.coverFailed} fallback={<div class="flex size-full items-center justify-center text-[30px] font-semibold text-[#7a8fbd]">{props.item.caseName.slice(0, 1)}</div>}>
+              <img
+                src={dockApiUrl(props.item.coverUrl)}
+                alt={props.item.caseName}
+                class="size-full object-fill"
+                loading="lazy"
+                onError={() => setState("coverFailed", true)}
+              />
+            </Show>
+            <span class="absolute bottom-2 left-2 max-w-[calc(100%-16px)] truncate rounded-[5px] bg-white/90 px-2 py-1 text-[11px] text-[#5d6679] shadow-[0_1px_4px_rgba(38,52,82,0.08)] backdrop-blur-sm">
+              {props.item.caseTag}
+            </span>
+          </div>
         </div>
-        <div class="relative aspect-[1.8] overflow-hidden bg-[#eef4ff]">
-          <Show when={props.item.coverUrl && !state.coverFailed} fallback={<div class="flex size-full items-center justify-center text-[30px] font-semibold text-[#7a8fbd]">{props.item.caseName.slice(0, 1)}</div>}>
-            <img
-              src={dockApiUrl(props.item.coverUrl)}
-              alt={props.item.caseName}
-              class="size-full object-fill"
-              loading="lazy"
-              onError={() => setState("coverFailed", true)}
-            />
-          </Show>
-          <span class="absolute bottom-2 left-2 max-w-[calc(100%-16px)] truncate rounded-[5px] bg-white/90 px-2 py-1 text-[11px] text-[#5d6679] shadow-[0_1px_4px_rgba(38,52,82,0.08)] backdrop-blur-sm">
-            {props.item.caseTag}
-          </span>
+        <div class="mt-2 flex items-center justify-between gap-2 px-1 text-[11px] text-[#8e96a8]">
+          <span>报告&nbsp;&nbsp;{formatCaseCharacterCount(props.item.reportCharCount)}</span>
+          <span class="shrink-0">{formatCaseDate(props.item.publishedAt)}</span>
         </div>
-      </div>
-      <div class="mt-2 flex items-center justify-between gap-2 px-1 text-[11px] text-[#8e96a8]">
-        <span>报告&nbsp;&nbsp;{formatCaseCharacterCount(props.item.reportCharCount)}</span>
-        <span class="shrink-0">{formatCaseDate(props.item.publishedAt)}</span>
-      </div>
-    </button>
+      </button>
+      <Show when={props.onDelete}>
+        <button
+          type="button"
+          title="删除案例"
+          aria-label={`删除案例 ${props.item.caseName}`}
+          class="absolute right-2 top-2 z-10 flex size-7 items-center justify-center rounded-[6px] border border-[#e5e9f1] bg-white/95 text-[#8a94a7] shadow-sm hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+          onClick={(event) => {
+            event.stopPropagation()
+            props.onDelete?.()
+          }}
+        >
+          <Icon name="trash" class="size-3.5" />
+        </button>
+      </Show>
+    </div>
   )
 }
 

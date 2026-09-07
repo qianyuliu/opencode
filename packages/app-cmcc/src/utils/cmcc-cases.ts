@@ -52,6 +52,10 @@ export const CMCC_CASE_CATEGORIES = [
 
 export const CMCC_CASES_UPDATED_EVENT = "cmcc:cases-updated"
 
+const CMCC_CASE_AGENT_TYPE_ALIASES: Record<string, string> = {
+  "ai-for-science-team": "ai-scientist",
+}
+
 export type CmccCaseCategoryCode = (typeof CMCC_CASE_CATEGORIES)[number]["code"]
 
 export function cmccCaseCategoryByCode(code: string | undefined) {
@@ -59,11 +63,18 @@ export function cmccCaseCategoryByCode(code: string | undefined) {
 }
 
 export function cmccCaseCategoryByAgentType(agentType: string | undefined) {
-  return CMCC_CASE_CATEGORIES.find((item) => item.agentType === agentType)
+  const key = agentType?.trim().toLowerCase()
+  if (!key) return undefined
+  const canonical = CMCC_CASE_AGENT_TYPE_ALIASES[key] ?? key
+  return CMCC_CASE_CATEGORIES.find((item) => item.agentType === canonical)
 }
 
 export function cmccCasePublishingAllowed(casePublishAllowed: boolean | undefined, agentType: string | undefined) {
   return casePublishAllowed === true && cmccCaseCategoryByAgentType(agentType) !== undefined
+}
+
+export function cmccCaseManagementAllowed(casePublishAllowed: boolean | undefined) {
+  return casePublishAllowed === true
 }
 
 export function formatCaseCharacterCount(value: number) {

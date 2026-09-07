@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   CMCC_CASE_CATEGORIES,
   cmccCaseCategoryByAgentType,
+  cmccCaseManagementAllowed,
   cmccCasePublishingAllowed,
   formatCaseCharacterCount,
 } from "./cmcc-cases"
@@ -11,6 +12,7 @@ describe("CMCC case categories", () => {
     expect(CMCC_CASE_CATEGORIES).toHaveLength(7)
     expect(cmccCaseCategoryByAgentType("deepcampaign")?.label).toBe("AI+营销")
     expect(cmccCaseCategoryByAgentType("deeptrading")?.code).toBe("finance")
+    expect(cmccCaseCategoryByAgentType("ai-for-science-team")?.code).toBe("science")
   })
 
   test("formats report character counts", () => {
@@ -24,5 +26,12 @@ describe("CMCC case categories", () => {
     expect(cmccCasePublishingAllowed(false, "deeptrading")).toBe(false)
     expect(cmccCasePublishingAllowed(undefined, "deeptrading")).toBe(false)
     expect(cmccCasePublishingAllowed(true, "unsupported-agent")).toBe(false)
+    expect(cmccCasePublishingAllowed(true, "ai-for-science-team")).toBe(true)
+  })
+
+  test("allows case management only for whitelisted users", () => {
+    expect(cmccCaseManagementAllowed(true)).toBe(true)
+    expect(cmccCaseManagementAllowed(false)).toBe(false)
+    expect(cmccCaseManagementAllowed(undefined)).toBe(false)
   })
 })

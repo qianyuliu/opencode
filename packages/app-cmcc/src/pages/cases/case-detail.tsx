@@ -7,9 +7,10 @@ import { createMediaQuery } from "@solid-primitives/media"
 import { For, Match, Show, Switch, createMemo, createResource, onCleanup, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useNavigate, useParams } from "@solidjs/router"
-import type { Message, Part, Session, SessionStatus } from "@opencode-ai/sdk/v2"
+import type { Message, Part, SessionStatus } from "@opencode-ai/sdk/v2"
 import type { DockApiCaseArtifact, DockApiCaseDetail, DockApiCaseSnapshot } from "@/context/dockapi"
 import { dockApiUrl, useDockApi } from "@/context/dockapi"
+import { CaseDeleteDialog } from "@/components/case-delete-dialog"
 import { useServer } from "@/context/server"
 import { useServerSDK } from "@/context/server-sdk"
 import { useTabs } from "@/context/tabs"
@@ -19,6 +20,7 @@ import { DeepTradingSnapshotWorkbenchProvider } from "@/pages/session/deeptradin
 import { DeepTradingSplitLayout } from "@/pages/session/deeptrading/split-layout"
 import type { DeepTradingArtifactSource, DeepTradingArtifactContent } from "@/pages/session/deeptrading/workbench-context"
 import { cmccArtifactWorkspace, cmccEnsureWorkspace, cmccRememberConversationWorkspace } from "@/utils/cmcc-workspace"
+import { CMCC_CASES_UPDATED_EVENT, cmccCaseManagementAllowed } from "@/utils/cmcc-cases"
 import { Persist, persisted } from "@/utils/persist"
 import { showToast } from "@/utils/toast"
 import { CASE_REPLAY_DURATION_MS, caseReplayFrame, compileCaseReplay } from "./replay"
@@ -80,6 +82,8 @@ export function CmccCaseDetailRoute() {
 
 function CaseDetailContent(props: { value: LoadedCase }) {
   const navigate = useNavigate()
+  const dockapi = useDockApi()
+  const [state, setState] = createStore({ deleteOpen: false })
   const source = createCaseArtifactSource(props.value.previewBaseUrl)
   const header = (
     <header class="flex h-12 shrink-0 items-center gap-3 border-b border-[#e3e7ef] bg-white px-4">
@@ -91,23 +95,52 @@ function CaseDetailContent(props: { value: LoadedCase }) {
         <small class="block truncate text-[11px] text-[#8a93a6]">{props.value.detail.categoryLabel} · {props.value.detail.caseTag}</small>
       </span>
       <span class="rounded-full bg-[#edf3ff] px-2.5 py-1 text-[11px] text-[#3d73d8]">案例快照</span>
+      <Show when={cmccCaseManagementAllowed(dockapi.user?.casePublishAllowed)}>
+        <button
+          type="button"
+          title="删除案例"
+          aria-label="删除案例"
+          class="flex size-8 items-center justify-center rounded-[6px] text-[#8a94a7] hover:bg-red-50 hover:text-red-600"
+          onClick={() => setState("deleteOpen", true)}
+        >
+          <Icon name="trash" class="size-4" />
+        </button>
+      </Show>
     </header>
+  )
+
+  const deleteDialog = (
+    <CaseDeleteDialog
+      value={state.deleteOpen ? props.value.detail : undefined}
+      onClose={() => setState("deleteOpen", false)}
+      onDeleted={() => {
+        setState("deleteOpen", false)
+        window.dispatchEvent(new Event(CMCC_CASES_UPDATED_EVENT))
+        navigate("/cases", { replace: true })
+      }}
+    />
   )
 
   if (props.value.detail.agentType === "deeptrading") {
     return (
-      <DeepTradingSnapshotWorkbenchProvider snapshot={() => props.value.snapshot} artifactSource={source}>
-        <DeepTradingCaseLayout header={header} />
-      </DeepTradingSnapshotWorkbenchProvider>
+      <>
+        <DeepTradingSnapshotWorkbenchProvider snapshot={() => props.value.snapshot} artifactSource={source}>
+          <DeepTradingCaseLayout header={header} />
+        </DeepTradingSnapshotWorkbenchProvider>
+        {deleteDialog}
+      </>
     )
   }
   return (
-    <GenericCaseLayout
-      value={props.value}
-      source={source}
-      header={header}
-      historyStyle={props.value.detail.agentType === "deepinsight"}
-    />
+    <>
+      <GenericCaseLayout
+        value={props.value}
+        source={source}
+        header={header}
+        historyStyle={props.value.detail.agentType === "deepinsight"}
+      />
+      {deleteDialog}
+    </>
   )
 }
 
