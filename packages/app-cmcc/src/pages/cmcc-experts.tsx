@@ -18,6 +18,7 @@ import robotBtn from "@/assets/experts/robot-button.png"
 import expertSkillResearch from "@/assets/experts/detail-skill-research.png"
 import expertSkillReview from "@/assets/experts/detail-skill-review.png"
 import expertSkillWriting from "@/assets/experts/detail-skill-writing.png"
+import shoppersDemoGif from "@/assets/experts/shoppers-demo.gif"
 import {
   cmccArtifactWorkspace,
   cmccEnsureWorkspace,
@@ -90,7 +91,7 @@ const INDUSTRY_EXPERTS = [
     const expert = CMCC_EXPERTS.find((item) => item.id === id)
     return expert ? [expert] : []
   }),
-  ...CMCC_EXPERTS.filter((expert) => expert.id !== "chat" && expert.id !== "workspace" && !INDUSTRY_ORDER.includes(expert.id)),
+  ...CMCC_EXPERTS.filter((expert) => expert.id !== "chat" && expert.id !== "workspace" && expert.id !== "deepinsight" && !INDUSTRY_ORDER.includes(expert.id)),
 ]
 
 function FeaturedCarousel(props: { experts: TeamExpert[]; onOpen: (expert: TeamExpert) => void }) {
@@ -164,7 +165,7 @@ export function CmccExpertCenterRoute() {
           </p>
         </header>
 
-        <FeaturedCarousel experts={CMCC_TEAM_EXPERTS} onOpen={(expert) => setActive(expert)} />
+        <FeaturedCarousel experts={CMCC_TEAM_EXPERTS.filter((e) => e.id !== "deepinsight")} onOpen={(expert) => setActive(expert)} />
 
         <section class="mt-7 w-full">
           <h2 class="m-0 text-[16px] font-medium leading-6 text-[#49386e]">AI + 产业洞察</h2>
@@ -286,6 +287,37 @@ function ExpertCard(props: { expert: CmccExpert; onClick: () => void }) {
   )
 }
 
+function GifDemoModal(props: { onClose: () => void }) {
+  return (
+    <Portal>
+      <div
+        class="fixed inset-0 z-[230] flex items-center justify-center bg-[#050112]/60 px-4 py-4 backdrop-blur-[2px]"
+        onClick={props.onClose}
+      >
+        <div
+          class="relative flex max-h-[90dvh] max-w-[420px] flex-col overflow-hidden rounded-[16px] bg-[#fff] shadow-[0_28px_90px_rgba(24,14,57,0.35)]"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <header class="flex h-12 shrink-0 items-center justify-between border-b border-[#edf0f7] px-5">
+            <h3 class="m-0 text-[14px] font-semibold leading-5 text-[#252839]">手机演示</h3>
+            <button
+              type="button"
+              class="flex size-7 shrink-0 items-center justify-center rounded-[6px] text-[#697085] transition hover:bg-[#f3f5fa] hover:text-[#252839]"
+              onClick={props.onClose}
+              aria-label="关闭演示"
+            >
+              <Icon name="close" class="size-3.5" />
+            </button>
+          </header>
+          <div class="flex items-center justify-center bg-[#f5f6fb] p-3">
+            <img src={shoppersDemoGif} alt="Shoppers Pro 手机演示" class="max-h-[calc(90dvh-90px)] w-auto rounded-[10px] object-contain" />
+          </div>
+        </div>
+      </div>
+    </Portal>
+  )
+}
+
 function ExpertDetailDialog(props: {
   expert: CmccExpert
   onClose: () => void
@@ -310,6 +342,7 @@ function ExpertDetailDialog(props: {
       image: EXPERT_SKILL_IMAGES[index] ?? expertSkillResearch,
     })),
   )
+  const [showDemo, setShowDemo] = createSignal(false)
 
   return (
     <Portal>
@@ -385,39 +418,58 @@ function ExpertDetailDialog(props: {
             </Show>
           </div>
 
-          <footer class="flex h-[68px] shrink-0 items-center justify-end gap-3 border-t border-[#edf0f7] px-6 shadow-[0_-5px_16px_rgba(52,42,89,0.04)]">
-            <button
-              type="button"
-              class="h-9 rounded-[8px] border border-[#637cff] bg-[#fff] px-5 text-[13px] font-medium text-[#536dff] transition hover:bg-[#f5f7ff]"
-              onClick={props.onClose}
-            >
-              取消
-            </button>
-            <Show
-              when={props.expert.kind === "team" ? props.expert : undefined}
-              fallback={
-                <button
-                  type="button"
-                  class="flex h-9 items-center justify-center rounded-[8px] bg-[linear-gradient(90deg,#536dff,#8758f5)] px-5 text-[13px] font-medium text-[#fff] shadow-[0_6px_14px_rgba(92,91,241,0.22)] transition hover:brightness-105"
-                  onClick={() => props.onOpenExternal(props.expert as ExternalExpert)}
-                >
-                  打开 {props.expert.name}
-                </button>
-              }
-            >
-              {(item) => (
-                <button
-                  type="button"
-                  class="flex h-9 items-center justify-center rounded-[8px] bg-[linear-gradient(90deg,#8758f5,#3b6dff)] px-5 text-[13px] font-medium text-[#fff] shadow-[0_6px_14px_rgba(120,95,245,0.25)] transition hover:brightness-105"
-                  onClick={() => props.onSummon(item())}
-                >
-                  召唤产业专家团
-                </button>
-              )}
+          <footer class="flex h-[68px] shrink-0 items-center justify-between border-t border-[#edf0f7] px-6 shadow-[0_-5px_16px_rgba(52,42,89,0.04)]">
+            <Show when={props.expert.id === "shoppers-pro"}>
+              <button
+                type="button"
+                class="flex h-9 items-center gap-1.5 rounded-[8px] border border-[#d7def7] bg-[#f8f9ff] px-4 text-[13px] font-medium text-[#5b4cff] transition hover:border-[#c4cff7] hover:bg-[#f0f2ff]"
+                onClick={() => setShowDemo(true)}
+              >
+                <svg class="size-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-linecap="square">
+                  <rect x="5.5" y="1.5" width="9" height="17" rx="1.5" />
+                  <line x1="5.5" y1="4.5" x2="14.5" y2="4.5" />
+                  <line x1="5.5" y1="15.5" x2="14.5" y2="15.5" />
+                </svg>
+                手机演示
+              </button>
             </Show>
+            <div class="flex items-center gap-3">
+              <button
+                type="button"
+                class="h-9 rounded-[8px] border border-[#637cff] bg-[#fff] px-5 text-[13px] font-medium text-[#536dff] transition hover:bg-[#f5f7ff]"
+                onClick={props.onClose}
+              >
+                取消
+              </button>
+              <Show
+                when={props.expert.kind === "team" ? props.expert : undefined}
+                fallback={
+                  <button
+                    type="button"
+                    class="flex h-9 items-center justify-center rounded-[8px] bg-[linear-gradient(90deg,#536dff,#8758f5)] px-5 text-[13px] font-medium text-[#fff] shadow-[0_6px_14px_rgba(92,91,241,0.22)] transition hover:brightness-105"
+                    onClick={() => props.onOpenExternal(props.expert as ExternalExpert)}
+                  >
+                    打开 {props.expert.name}
+                  </button>
+                }
+              >
+                {(item) => (
+                  <button
+                    type="button"
+                    class="flex h-9 items-center justify-center rounded-[8px] bg-[linear-gradient(90deg,#8758f5,#3b6dff)] px-5 text-[13px] font-medium text-[#fff] shadow-[0_6px_14px_rgba(120,95,245,0.25)] transition hover:brightness-105"
+                    onClick={() => props.onSummon(item())}
+                  >
+                    召唤产业专家团
+                  </button>
+                )}
+              </Show>
+            </div>
           </footer>
         </section>
       </div>
+      <Show when={showDemo()}>
+        <GifDemoModal onClose={() => setShowDemo(false)} />
+      </Show>
     </Portal>
   )
 }
