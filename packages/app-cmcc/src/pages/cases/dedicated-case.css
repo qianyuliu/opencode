@@ -1,0 +1,9 @@
+.case-dedicated-results section[aria-label$="DAG"] {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #bdc9df transparent;
+}
+
+.case-dedicated-results section[aria-label$="DAG"] > div {
+  min-height: var(--case-dag-height);
+}

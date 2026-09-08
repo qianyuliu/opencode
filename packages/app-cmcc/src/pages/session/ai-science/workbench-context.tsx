@@ -13,6 +13,7 @@ import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { cmccScanWorkspaceArtifactPaths, cmccWorkspaceRelativePath } from "@/utils/cmcc-artifact-paths"
 import { cmccArtifactDirectory } from "@/utils/cmcc-workspace"
+import type { AgentArtifactSource } from "../agent-workbench/artifact-source"
 import { discoverSessionArtifacts } from "../agent-workbench/artifacts"
 import type { AgentWorkbench, SessionTranscript } from "../agent-workbench/model"
 import {
@@ -59,6 +60,7 @@ export type AiScienceWorkbenchContextValue = {
   progressPercent: Accessor<number>
   artifactRoot: Accessor<string | undefined>
   filesLoading: Accessor<boolean>
+  artifactSource?: AgentArtifactSource
   replay: {
     canReplay: Accessor<boolean>
     isPreparing: Accessor<boolean>
@@ -547,6 +549,10 @@ export function useAiScienceWorkbench() {
   const value = useContext(AiScienceWorkbenchContext)
   if (!value) throw new Error("AI for Science workbench context must be used within a provider")
   return value
+}
+
+export function AiScienceWorkbenchValueProvider(props: ParentProps<{ value: AiScienceWorkbenchContextValue }>) {
+  return <AiScienceWorkbenchContext.Provider value={props.value}>{props.children}</AiScienceWorkbenchContext.Provider>
 }
 
 function emptyWorkbench(loading: boolean, error?: string, rootSessionId = ""): AgentWorkbench {

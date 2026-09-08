@@ -24,7 +24,7 @@ const TABS: Array<{ id: DeepInspectTab; label: string }> = [
 const ACTION_BUTTON_CLASS =
   "h-9 shrink-0 rounded-[18px] bg-[#eff6ff] px-3 text-[14px] font-bold text-[#3b82f6] shadow-[0_4px_10px_rgba(59,130,246,0.12)] transition hover:bg-[#e5efff] disabled:cursor-wait disabled:opacity-60 @min-[340px]:px-5"
 
-export function DeepInspectResultsPanel() {
+export function DeepInspectResultsPanel(props: { onCreateSame?: () => void } = {}) {
   const context = useDeepInspectWorkbench()
   const dockapi = useDockApi()
   const server = useServer()
@@ -78,6 +78,7 @@ export function DeepInspectResultsPanel() {
 
   const createSame = () => {
     if (context.replay.isPreparing() || context.replay.isReplaying()) return
+    if (props.onCreateSame) return props.onCreateSame()
     const query = context.workbench().query.trim()
     if (!query) {
       showToast({ variant: "default", title: "暂无可复用的查询内容" })

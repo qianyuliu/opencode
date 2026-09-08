@@ -6,7 +6,7 @@ export type CmccHistoryProduct = Readonly<{
 }>
 
 const deepResearch = {
-  label: "通用深度",
+  label: "通用对话",
   backgroundColor: "#e8efff",
   borderColor: "#d8e4ff",
   textColor: "#4774e8",

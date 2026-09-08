@@ -4,7 +4,7 @@ import { cmccHistoryProduct } from "./cmcc-history-product"
 describe("CMCC history product labels", () => {
   test("maps supported agent types to Chinese product labels", () => {
     const cases = [
-      ["DeepInsight", "通用深度"],
+      ["DeepInsight", "通用对话"],
       ["zhengqi-visit-intel", "AI+政企"],
       ["deepinspect", "AI+巡察"],
       ["deeptrading", "AI+财经"],

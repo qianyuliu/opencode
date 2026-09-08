@@ -13,6 +13,7 @@ import { useFile } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { artifactText } from "@/pages/session/artifact-preview"
+import type { AgentArtifactSource } from "../agent-workbench/artifact-source"
 import { cmccWorkspaceRelativePath } from "@/utils/cmcc-artifact-paths"
 import { cmccArtifactDirectory } from "@/utils/cmcc-workspace"
 import { artifactByRole, discoverSessionArtifacts } from "../agent-workbench/artifacts"
@@ -56,6 +57,7 @@ export type ShoppersWorkbenchContextValue = {
   selectedAgentId: Accessor<string>
   selectAgent: (agentId: string) => void
   retrySession: (sessionId: string) => Promise<void>
+  artifactSource?: AgentArtifactSource
   replay: {
     canReplay: Accessor<boolean>
     isPreparing: Accessor<boolean>
@@ -593,6 +595,10 @@ export function useShoppersWorkbench() {
   const value = useContext(ShoppersWorkbenchContext)
   if (!value) throw new Error("ShoppersWorkbench context must be used within a provider")
   return value
+}
+
+export function ShoppersWorkbenchValueProvider(props: ParentProps<{ value: ShoppersWorkbenchContextValue }>) {
+  return <ShoppersWorkbenchContext.Provider value={props.value}>{props.children}</ShoppersWorkbenchContext.Provider>
 }
 
 function emptyWorkbench(loading: boolean, error?: string, rootSessionId = ""): AgentWorkbench {

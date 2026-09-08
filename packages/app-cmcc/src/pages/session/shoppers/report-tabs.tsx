@@ -8,11 +8,27 @@ import { useSDK } from "@/context/sdk"
 import { artifactText } from "@/pages/session/artifact-preview"
 import { showToast } from "@/utils/toast"
 import type { SessionArtifact } from "../agent-workbench/model"
+import { SnapshotFilesTab, SnapshotTextReportTab } from "../agent-workbench/snapshot-report-tabs"
 import { SHOPPERS_LEAD_AGENT } from "./config"
 import { useShoppersWorkbench } from "./workbench-context"
 
 export function ShoppersFilesTab() {
   const context = useShoppersWorkbench()
+  const ownerLabel = (agentId: string) => {
+    if (agentId === SHOPPERS_LEAD_AGENT) return "总览"
+    const agent = context.workbench().agents.find((item) => item.id === agentId)
+    return agent ? `${agent.profession} · ${agent.name}` : agentId || "未知来源"
+  }
+  if (context.artifactSource) {
+    return (
+      <SnapshotFilesTab
+        artifacts={() => context.workbench().artifacts}
+        source={context.artifactSource}
+        emptyDescription="该案例快照没有保存推荐产物文件。"
+        ownerLabel={(artifact) => ownerLabel(artifact.ownerAgentId)}
+      />
+    )
+  }
   const file = useFile()
   const sdk = useSDK()
   const [state, setState] = createStore({
@@ -26,12 +42,6 @@ export function ShoppersFilesTab() {
     const artifact = selected()
     return artifact ? file.get(artifact.path) : undefined
   })
-  const ownerLabel = (agentId: string) => {
-    if (agentId === SHOPPERS_LEAD_AGENT) return "总览"
-    const agent = context.workbench().agents.find((item) => item.id === agentId)
-    return agent ? `${agent.profession} · ${agent.name}` : agentId || "未知来源"
-  }
-
   createEffect(() => {
     const artifact = selected()
     if (artifact) void file.load(artifact.path)
@@ -157,6 +167,20 @@ export function ShoppersFilesTab() {
 
 export function ShoppersTextReportTab() {
   const context = useShoppersWorkbench()
+  if (context.artifactSource) {
+    return (
+      <SnapshotTextReportTab
+        path={() => context.workbench().textReportPath}
+        source={context.artifactSource}
+        replaying={context.replay.isReplaying}
+        replayMarkdown={context.replay.textReportMarkdown}
+        cacheKey={() =>
+          `${context.workbench().rootSessionId}:shoppers-case-report${context.replay.isReplaying() ? ":replay" : ""}`
+        }
+        emptyDescription="案例快照中没有明确的文字报告文件。"
+      />
+    )
+  }
   const file = useFile()
   const path = createMemo(() => context.workbench().textReportPath)
   const state = createMemo(() => (path() ? file.get(path()!) : undefined))

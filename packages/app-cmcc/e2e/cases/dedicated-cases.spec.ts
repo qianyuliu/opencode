@@ -1,0 +1,335 @@
+import { expect, test, type Page } from "@playwright/test"
+import type { DockApiCaseSnapshot } from "../../src/context/dockapi"
+import { mockOpenCodeServer } from "../utils/mock-server"
+import { fixture } from "../smoke/session-timeline.fixture"
+
+test.use({ channel: process.env.PLAYWRIGHT_CHANNEL, video: "off" })
+
+const cases = [
+  {
+    type: "deepinspect",
+    lead: "deepinspect/deepinspect-team-lead",
+    member: "deepinspect/report-writer",
+    category: "inspection",
+    experts: 11,
+  },
+  {
+    type: "zhengqi-visit-intel",
+    lead: "zhengqi-visit-intel/zhengqi-visit-intel-team-lead",
+    member: "zhengqi-visit-intel/report-chief-writer",
+    category: "government",
+    experts: 10,
+  },
+  {
+    type: "shoppers-pro",
+    lead: "shoppers-pro/shoppers-pro-team-lead",
+    member: "shoppers-pro/card-editor",
+    category: "recommendation",
+    experts: 4,
+  },
+  {
+    type: "ai-for-science-team",
+    lead: "ai-for-science-team/ai-for-science-team-team-lead",
+    member: "ai-for-science-team/as-evidence-writer",
+    category: "science",
+    experts: 20,
+  },
+]
+
+type CaseInput = (typeof cases)[number]
+const reportText = "# 案例测试报告\n\n## 摘要\n\n只读快照报告正文。"
+
+function snapshot(input: CaseInput): DockApiCaseSnapshot {
+  const entry = (id: string, agent: string, parentID?: string): DockApiCaseSnapshot["sessions"][number] => ({
+    session: {
+      id,
+      slug: id,
+      projectID: "case-test",
+      directory: "case://workspace",
+      title: id,
+      agent,
+      parentID,
+      version: "v2",
+      time: { created: 1000, updated: 3000 },
+      tokens: { input: 10, output: 20, reasoning: 5, cache: { read: 50, write: 10 } },
+    },
+    status: { type: "idle" },
+    messages: [
+      {
+        info: {
+          id: `${id}-u`,
+          sessionID: id,
+          role: "user",
+          time: { created: 1000 },
+          agent,
+          model: { providerID: "test", modelID: "test" },
+        },
+        parts: [
+          {
+            id: `${id}-ut`,
+            messageID: `${id}-u`,
+            sessionID: id,
+            type: "text",
+            text: parentID ? "专家任务" : "案例原始查询",
+          },
+        ],
+      },
+      {
+        info: {
+          id: `${id}-a`,
+          sessionID: id,
+          role: "assistant",
+          parentID: `${id}-u`,
+          time: { created: 1500, completed: 3000 },
+          agent,
+          modelID: "test",
+          providerID: "test",
+          mode: "build",
+          path: { cwd: "case://workspace", root: "case://workspace" },
+          cost: 0,
+          tokens: { input: 10, output: 20, reasoning: 5, cache: { read: 50, write: 10 } },
+        },
+        parts: [
+          {
+            id: `${id}-at`,
+            messageID: `${id}-a`,
+            sessionID: id,
+            type: "text",
+            text: parentID ? "专家分析完成" : "案例总览结论",
+          },
+        ],
+      },
+    ],
+  })
+  const root = entry("case-root", input.lead)
+  const child = entry("case-child", input.member, "case-root")
+  const filenames =
+    input.category === "science"
+      ? ["writing/paper.md", "figures/chart.svg"]
+      : ["20-report.md", "25-visual-report.json", "06-consolidated-issues.json"]
+  for (const path of filenames) {
+    child.messages[1].parts.push({
+      id: `write-${path}`,
+      messageID: "case-child-a",
+      sessionID: "case-child",
+      type: "tool",
+      callID: path,
+      tool: "write",
+      state: {
+        status: "completed",
+        title: path,
+        input: { filePath: `case://artifacts/${path}`, content: "test" },
+        output: "ok",
+        metadata: {},
+        time: { start: 1900, end: 2500 },
+      },
+    })
+  }
+  return {
+    schemaVersion: 1,
+    caseCode: input.category,
+    capturedAt: "2026-09-07T00:00:00Z",
+    rootSessionId: "case-root",
+    query: "案例原始查询",
+    agentType: input.type,
+    rootAgent: input.lead,
+    sessions: [root, child],
+    artifacts: filenames.map((path) => ({ path, size: 120, contentType: "text/plain" })),
+  }
+}
+
+async function prepare(page: Page, input: CaseInput, options: { fileError?: boolean } = {}) {
+  const apiRequests: string[] = []
+  const errors: string[] = []
+  page.on("pageerror", (error) => errors.push(error.message))
+  page.on("request", (request) => {
+    if (new URL(request.url()).port === "4096")
+      apiRequests.push(request.method() + " " + new URL(request.url()).pathname)
+  })
+  await mockOpenCodeServer(page, { ...fixture, sessions: [], pageMessages: () => ({ items: [] }) })
+  await page.addInitScript(() => localStorage.setItem("dockapi.accessToken", "case-ui-test-token"))
+  const snap = snapshot(input)
+  const metadata = {
+    ...snap,
+    caseName: `测试案例-${input.category}`,
+    category: input.category,
+    categoryLabel: "测试分类",
+    caseTag: "测试标签",
+    coverUrl: "",
+    reportCharCount: 20,
+    publishedAt: "2026-09-07",
+    snapshotVersion: "test-version",
+    snapshotBytes: 1000,
+    artifactBytes: 120,
+  }
+  const fileRequests: string[] = []
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname
+    const json = (data: unknown) =>
+      route.fulfill({ json: { code: 200, message: "ok", data }, headers: { "access-control-allow-origin": "*" } })
+    if (path === "/api/user/profile")
+      return json({
+        user: { id: 999, name: "测试用户", phone: "", enabled: true, casePublishAllowed: false },
+        workspace: { id: 999, workspaceKey: "test", directoryPath: fixture.directory, status: "READY" },
+      })
+    if (path === "/api/dockapi/sessions") return json([])
+    if (path.endsWith("/preview-ticket"))
+      return json({
+        baseUrl: `http://localhost:8081/api/dockapi/case-preview/${input.category}`,
+        expiresAt: "2099-01-01T00:00:00Z",
+      })
+    if (path.endsWith("/snapshot"))
+      return route.fulfill({ json: snap, headers: { "access-control-allow-origin": "*" } })
+    if (path.includes("/case-preview/")) {
+      fileRequests.push(path)
+      if (options.fileError)
+        return route.fulfill({ status: 404, body: "missing", headers: { "access-control-allow-origin": "*" } })
+      let body = reportText
+      if (path.endsWith("06-consolidated-issues.json")) body = JSON.stringify({ statistics: { total_issues: 7 } })
+      if (path.endsWith("25-visual-report.json")) {
+        const blocks = [
+          { type: "markdown", content: "图表测试正文" },
+          {
+            type: "chart",
+            chart: {
+              id: "test-chart",
+              option: {
+                xAxis: { type: "category", data: ["A", "B"] },
+                yAxis: {},
+                series: [{ type: "bar", data: [3, 5] }],
+              },
+            },
+          },
+        ]
+        body = JSON.stringify(
+          input.category === "government"
+            ? { report: { title: "政企图表测试", sections: [{ id: "s", title: "测试图表", blocks }] } }
+            : { layout_version: 2, title: "巡查图表测试", sections: [{ id: "s", heading: "测试图表", blocks }] },
+        )
+      }
+      if (path.endsWith(".svg"))
+        return route.fulfill({
+          contentType: "image/svg+xml",
+          body: '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><rect width="120" height="80" fill="#4378c4"/></svg>',
+        })
+      return route.fulfill({ contentType: "text/plain", body, headers: { "access-control-allow-origin": "*" } })
+    }
+    if (path === `/api/dockapi/cases/${input.category}`) return json(metadata)
+    return json([])
+  })
+  await page.goto(`/cases/${input.category}`)
+  await expect(page.getByText(`测试案例-${input.category}`, { exact: true })).toBeVisible({ timeout: 60000 })
+  return { errors, apiRequests, fileRequests }
+}
+
+for (const input of cases) {
+  test(`${input.category}: dedicated snapshot, files and replay are read-only`, async ({ page }) => {
+    test.setTimeout(120000)
+    await page.setViewportSize({ width: 1440, height: 900 })
+    const state = await prepare(page, input)
+    await expect(page.getByRole("button", { name: "分析团队", exact: true })).toBeVisible()
+    await expect(page.getByText(`${input.experts} 位`, { exact: true })).toBeVisible()
+    await expect(page.locator('[contenteditable="true"], textarea')).toHaveCount(0)
+    await page.screenshot({ path: `e2e/test-results/case-${input.category}-desktop.png`, fullPage: true })
+    await page.getByRole("button", { name: "文字报告", exact: true }).click()
+    if (input.category === "science") await expect(page.getByText("文字报告尚未生成", { exact: true })).toBeVisible()
+    else await expect(page.getByText("只读快照报告正文。", { exact: true })).toBeVisible()
+    await page.getByRole("button", { name: "可视化报告", exact: true }).click()
+    if (["government", "inspection"].includes(input.category)) {
+      await expect(page.getByText("图表测试正文", { exact: true })).toBeVisible()
+      await expect(page.locator("canvas")).toBeVisible()
+      await expect
+        .poll(() =>
+          page.locator("canvas").evaluate((canvas: HTMLCanvasElement) => {
+            const data = canvas.getContext("2d")?.getImageData(0, 0, canvas.width, canvas.height).data
+            return data?.some((value, index) => index % 4 === 3 && value > 0) ?? false
+          }),
+        )
+        .toBe(true)
+      await page.screenshot({ path: `e2e/test-results/case-${input.category}-visual.png`, fullPage: true })
+    } else
+      await expect(
+        page.getByText(input.category === "science" ? "可视化报告尚未生成" : "可视化报告格式暂未适配", { exact: true }),
+      ).toBeVisible()
+    await page.getByRole("button", { name: "文件", exact: true }).click()
+    if (input.category === "science") {
+      await page.getByRole("button", { name: /^writing/ }).click()
+      await page.getByRole("button", { name: "paper.md", exact: true }).click()
+    } else await page.getByRole("button", { name: "预览", exact: true }).first().click()
+    await expect(page.getByRole("button", { name: "返回", exact: true })).toBeVisible()
+    const download = page.waitForEvent("download")
+    await page.getByRole("button", { name: "下载", exact: true }).click()
+    expect((await download).suggestedFilename()).toBeTruthy()
+    await page.getByRole("button", { name: "看回放", exact: true }).click()
+    await expect(page.getByRole("button", { name: "停止回放", exact: true })).toBeVisible()
+    await expect(page.getByRole("button", { name: "做同款", exact: true })).toHaveCount(0)
+    await page.getByRole("button", { name: "停止回放", exact: true }).click()
+    await expect(page.getByRole("button", { name: "做同款", exact: true })).toBeVisible()
+    await page.getByRole("button", { name: "隐藏左栏", exact: true }).click()
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.getByRole("button", { name: "分析结果", exact: true }).click()
+    await expect(page.getByRole("button", { name: "分析团队", exact: true })).toBeVisible()
+    const dag = page.locator('section[aria-label$="DAG"]')
+    const overlapping = await dag.evaluate((section) => {
+      const rects = [...section.querySelectorAll("button")].map((button) => button.getBoundingClientRect())
+      return rects.some((a, index) =>
+        rects
+          .slice(index + 1)
+          .some(
+            (b) =>
+              Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 &&
+              Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1,
+          ),
+      )
+    })
+    expect(overlapping).toBe(false)
+    await page.screenshot({ path: `e2e/test-results/case-${input.category}-mobile.png`, fullPage: true })
+    expect(state.apiRequests.filter((value) => /\/session\/case-|\/file\//.test(value))).toEqual([])
+    expect(state.errors).toEqual([])
+  })
+}
+
+test("snapshot report failure shows an error without repeated fetches", async ({ page }) => {
+  const state = await prepare(page, cases[1], { fileError: true })
+  await page.getByRole("button", { name: "文字报告", exact: true }).click()
+  await expect(page.getByText("文字报告读取失败", { exact: true })).toBeVisible()
+  await page.waitForTimeout(1000)
+  expect(state.fileRequests.filter((path) => path.endsWith("20-report.md"))).toHaveLength(1)
+  expect(state.errors).toEqual([])
+})
+
+test("replay catches up, respects manual tabs and restores the completed snapshot", async ({ page }) => {
+  const state = await prepare(page, cases[1])
+  await page.clock.install()
+  await page.getByRole("button", { name: "看回放", exact: true }).click()
+  await page.getByRole("button", { name: "文件", exact: true }).click()
+  await page.clock.fastForward(57000)
+  await expect(page.getByRole("button", { name: "文件", exact: true })).toHaveAttribute("data-selected", "")
+  await expect(page.getByRole("button", { name: "停止回放", exact: true })).toBeVisible()
+  await page.clock.fastForward(4000)
+  await expect(page.getByRole("button", { name: "看回放", exact: true })).toBeVisible()
+  await expect(page.getByRole("button", { name: "做同款", exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "文字报告", exact: true }).click()
+  await expect(page.getByText("只读快照报告正文。", { exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "看回放", exact: true }).click()
+  await expect(page.getByRole("button", { name: "分析团队", exact: true })).toHaveAttribute("data-selected", "")
+  await page.getByRole("button", { name: "返回案例库", exact: true }).click()
+  await page.clock.fastForward(65000)
+  expect(state.apiRequests.filter((value) => /\/session\/case-|\/file\//.test(value))).toEqual([])
+  expect(state.errors).toEqual([])
+})
+
+test("science alias creates a draft with the case's original agent and query", async ({ page }) => {
+  const input = { ...cases[3], type: "ai-scientist" }
+  const state = await prepare(page, input)
+  await page.getByRole("button", { name: "做同款", exact: true }).click()
+  await expect(page).toHaveURL(/\/new-session\?/)
+  await expect(page.locator('[contenteditable="true"]')).toContainText("案例原始查询")
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("opencode.global.dat:tabs")))
+    .toContain(`"agent":"${input.lead}"`)
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("opencode.global.dat:tabs")))
+    .toContain('"expertID":"ai-scientist"')
+  expect(state.apiRequests.filter((value) => value.startsWith("POST /session"))).toEqual([])
+})

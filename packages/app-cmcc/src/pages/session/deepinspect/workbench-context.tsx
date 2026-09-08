@@ -13,6 +13,7 @@ import { useFile } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { artifactText } from "@/pages/session/artifact-preview"
+import type { AgentArtifactSource } from "../agent-workbench/artifact-source"
 import { cmccArtifactDirectory } from "@/utils/cmcc-workspace"
 import { artifactByRole, discoverSessionArtifacts } from "../agent-workbench/artifacts"
 import type { AgentWorkbench, SessionTranscript } from "../agent-workbench/model"
@@ -62,6 +63,7 @@ export type DeepInspectWorkbenchContextValue = {
   executions: Accessor<DeepInspectExecutionView[]>
   progressPercent: Accessor<number>
   issueCount: Accessor<number | undefined>
+  artifactSource?: AgentArtifactSource
   replay: {
     canReplay: Accessor<boolean>
     isPreparing: Accessor<boolean>
@@ -531,6 +533,12 @@ export function useDeepInspectWorkbench() {
   const value = useContext(DeepInspectWorkbenchContext)
   if (!value) throw new Error("DeepInspectWorkbench context must be used within a provider")
   return value
+}
+
+export function DeepInspectWorkbenchValueProvider(props: ParentProps<{ value: DeepInspectWorkbenchContextValue }>) {
+  return (
+    <DeepInspectWorkbenchContext.Provider value={props.value}>{props.children}</DeepInspectWorkbenchContext.Provider>
+  )
 }
 
 function emptyWorkbench(loading: boolean, error?: string, rootSessionId = ""): AgentWorkbench {

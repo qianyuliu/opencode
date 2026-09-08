@@ -4,7 +4,7 @@ import { SessionTurn } from "@opencode-ai/session-ui/session-turn"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { createMediaQuery } from "@solid-primitives/media"
-import { For, Match, Show, Switch, createMemo, createResource, onCleanup, type JSX } from "solid-js"
+import { For, Match, Show, Switch, createMemo, createResource, onCleanup, untrack, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useNavigate, useParams } from "@solidjs/router"
 import type { Message, Part, SessionStatus } from "@opencode-ai/sdk/v2"
@@ -14,13 +14,32 @@ import { CaseDeleteDialog } from "@/components/case-delete-dialog"
 import { useServer } from "@/context/server"
 import { useServerSDK } from "@/context/server-sdk"
 import { useTabs } from "@/context/tabs"
+import { AiScienceResultsPanel } from "@/pages/session/ai-science/ai-science-results-panel"
+import { AiScienceSessionView } from "@/pages/session/ai-science/ai-science-session-view"
+import { AiScienceSnapshotWorkbenchProvider } from "@/pages/session/ai-science/snapshot-workbench"
+import { AI_SCIENCE_DAG_LEVELS } from "@/pages/session/ai-science/config"
+import { DeepInspectResultsPanel } from "@/pages/session/deepinspect/deepinspect-results-panel"
+import { DeepInspectSessionView } from "@/pages/session/deepinspect/deepinspect-session-view"
+import { DeepInspectSnapshotWorkbenchProvider } from "@/pages/session/deepinspect/snapshot-workbench"
+import { DEEPINSPECT_DAG_LEVELS } from "@/pages/session/deepinspect/config"
 import { DeepTradingResultsPanel } from "@/pages/session/deeptrading/deeptrading-results-panel"
 import { DeepTradingSessionView } from "@/pages/session/deeptrading/deeptrading-session-view"
 import { DeepTradingSnapshotWorkbenchProvider } from "@/pages/session/deeptrading/snapshot-workbench"
 import { DeepTradingSplitLayout } from "@/pages/session/deeptrading/split-layout"
-import type { DeepTradingArtifactSource, DeepTradingArtifactContent } from "@/pages/session/deeptrading/workbench-context"
+import type {
+  DeepTradingArtifactSource,
+  DeepTradingArtifactContent,
+} from "@/pages/session/deeptrading/workbench-context"
+import { ShoppersResultsPanel } from "@/pages/session/shoppers/shoppers-results-panel"
+import { ShoppersSessionView } from "@/pages/session/shoppers/shoppers-session-view"
+import { ShoppersSnapshotWorkbenchProvider } from "@/pages/session/shoppers/snapshot-workbench"
+import { SHOPPERS_DAG_LEVELS } from "@/pages/session/shoppers/config"
+import { ZhengqiSnapshotWorkbenchProvider } from "@/pages/session/zhengqi/snapshot-workbench"
+import { ZhengqiResultsPanel } from "@/pages/session/zhengqi/zhengqi-results-panel"
+import { ZhengqiSessionView } from "@/pages/session/zhengqi/zhengqi-session-view"
+import { ZHENGQI_DAG_LEVELS } from "@/pages/session/zhengqi/config"
 import { cmccArtifactWorkspace, cmccEnsureWorkspace, cmccRememberConversationWorkspace } from "@/utils/cmcc-workspace"
-import { CMCC_CASES_UPDATED_EVENT, cmccCaseManagementAllowed } from "@/utils/cmcc-cases"
+import { CMCC_CASES_UPDATED_EVENT, cmccCaseCategoryByAgentType, cmccCaseManagementAllowed } from "@/utils/cmcc-cases"
 import { Persist, persisted } from "@/utils/persist"
 import { showToast } from "@/utils/toast"
 import { CASE_REPLAY_DURATION_MS, caseReplayFrame, compileCaseReplay } from "./replay"
@@ -31,6 +50,7 @@ import {
   clampCaseFilePanelWidth,
 } from "./file-panel-layout"
 import echartsRuntimeUrl from "../../../node_modules/echarts/dist/echarts.min.js?url"
+import "./dedicated-case.css"
 
 type LoadedCase = {
   detail: DockApiCaseDetail
@@ -64,13 +84,23 @@ export function CmccCaseDetailRoute() {
   return (
     <Switch>
       <Match when={loaded.loading}>
-        <div class="flex size-full items-center justify-center bg-white text-[13px] text-[#8b94a7]">正在加载案例详情...</div>
+        <div class="flex size-full items-center justify-center bg-white text-[13px] text-[#8b94a7]">
+          正在加载案例详情...
+        </div>
       </Match>
       <Match when={loaded.error}>
         <div class="flex size-full flex-col items-center justify-center bg-white px-6 text-center">
           <strong class="text-[15px] text-[#3d4659]">案例详情加载失败</strong>
-          <span class="mt-2 text-[13px] text-[#8b94a7]">{loaded.error instanceof Error ? loaded.error.message : String(loaded.error)}</span>
-          <button type="button" class="mt-5 h-9 rounded-[6px] bg-[#edf3ff] px-4 text-[13px] text-[#3474e8]" onClick={() => navigate("/cases")}>返回案例库</button>
+          <span class="mt-2 text-[13px] text-[#8b94a7]">
+            {loaded.error instanceof Error ? loaded.error.message : String(loaded.error)}
+          </span>
+          <button
+            type="button"
+            class="mt-5 h-9 rounded-[6px] bg-[#edf3ff] px-4 text-[13px] text-[#3474e8]"
+            onClick={() => navigate("/cases")}
+          >
+            返回案例库
+          </button>
         </div>
       </Match>
       <Match when={loaded()} keyed>
@@ -83,16 +113,50 @@ export function CmccCaseDetailRoute() {
 function CaseDetailContent(props: { value: LoadedCase }) {
   const navigate = useNavigate()
   const dockapi = useDockApi()
+  const server = useServer()
+  const serverSDK = useServerSDK()
+  const tabs = useTabs()
+  const createSame = () => {
+    const query = props.value.detail.query.trim()
+    const directory = dockapi.workspace?.directoryPath
+    const artifactDirectory = cmccArtifactWorkspace(directory)
+    if (!query || !directory || !artifactDirectory || !tabs.ready()) {
+      showToast({ variant: "error", title: "无法创建同款会话", description: "查询内容或用户工作目录尚未准备完成。" })
+      return
+    }
+    tabs.newDraft(
+      { server: server.key, directory, artifactDirectory, expertID: props.value.detail.agentType },
+      query,
+      { agent: props.value.detail.rootAgent },
+    )
+    cmccRememberConversationWorkspace(directory)
+    server.projects.touch(directory)
+    void cmccEnsureWorkspace(
+      artifactDirectory,
+      (path) => serverSDK().client.file.createDirectory({ path }, { throwOnError: true }),
+      serverSDK().scope,
+    ).catch((error) => {
+      showToast({ variant: "error", title: "无法准备会话产物目录", description: error instanceof Error ? error.message : String(error) })
+    })
+  }
   const [state, setState] = createStore({ deleteOpen: false })
   const source = createCaseArtifactSource(props.value.previewBaseUrl)
+  const category = cmccCaseCategoryByAgentType(props.value.detail.agentType)?.code
   const header = (
     <header class="flex h-12 shrink-0 items-center gap-3 border-b border-[#e3e7ef] bg-white px-4">
-      <button type="button" class="flex size-8 items-center justify-center rounded-[6px] text-[#63708a] hover:bg-[#f0f3f8]" aria-label="返回案例库" onClick={() => navigate("/cases")}>
+      <button
+        type="button"
+        class="flex size-8 items-center justify-center rounded-[6px] text-[#63708a] hover:bg-[#f0f3f8]"
+        aria-label="返回案例库"
+        onClick={() => navigate("/cases")}
+      >
         <Icon name="arrow-left" class="size-4" />
       </button>
       <span class="min-w-0 flex-1">
         <strong class="block truncate text-[14px] font-medium text-[#30394d]">{props.value.detail.caseName}</strong>
-        <small class="block truncate text-[11px] text-[#8a93a6]">{props.value.detail.categoryLabel} · {props.value.detail.caseTag}</small>
+        <small class="block truncate text-[11px] text-[#8a93a6]">
+          {props.value.detail.categoryLabel} · {props.value.detail.caseTag}
+        </small>
       </span>
       <span class="rounded-full bg-[#edf3ff] px-2.5 py-1 text-[11px] text-[#3d73d8]">案例快照</span>
       <Show when={cmccCaseManagementAllowed(dockapi.user?.casePublishAllowed)}>
@@ -121,12 +185,80 @@ function CaseDetailContent(props: { value: LoadedCase }) {
     />
   )
 
-  if (props.value.detail.agentType === "deeptrading") {
+  if (category === "finance") {
     return (
       <>
         <DeepTradingSnapshotWorkbenchProvider snapshot={() => props.value.snapshot} artifactSource={source}>
-          <DeepTradingCaseLayout header={header} />
+          <DedicatedCaseLayout header={header} left={<DeepTradingSessionView />} right={<DeepTradingResultsPanel />} />
         </DeepTradingSnapshotWorkbenchProvider>
+        {deleteDialog}
+      </>
+    )
+  }
+  if (category === "inspection") {
+    return (
+      <>
+        <DeepInspectSnapshotWorkbenchProvider snapshot={() => props.value.snapshot} artifactSource={source}>
+          <DedicatedCaseLayout
+            header={header}
+            persistKey="deepinspect-panels"
+            label="DeepInspect"
+            dagRows={DEEPINSPECT_DAG_LEVELS.length}
+            left={<DeepInspectSessionView />}
+            right={<DeepInspectResultsPanel onCreateSame={createSame} />}
+          />
+        </DeepInspectSnapshotWorkbenchProvider>
+        {deleteDialog}
+      </>
+    )
+  }
+  if (category === "government") {
+    return (
+      <>
+        <ZhengqiSnapshotWorkbenchProvider snapshot={() => props.value.snapshot} artifactSource={source}>
+          <DedicatedCaseLayout
+            header={header}
+            persistKey="zhengqi-panels"
+            label="DeepEngage"
+            dagRows={ZHENGQI_DAG_LEVELS.length}
+            left={<ZhengqiSessionView />}
+            right={<ZhengqiResultsPanel onCreateSame={createSame} />}
+          />
+        </ZhengqiSnapshotWorkbenchProvider>
+        {deleteDialog}
+      </>
+    )
+  }
+  if (category === "recommendation") {
+    return (
+      <>
+        <ShoppersSnapshotWorkbenchProvider snapshot={() => props.value.snapshot} artifactSource={source}>
+          <DedicatedCaseLayout
+            header={header}
+            persistKey="shoppers-pro-panels"
+            label="好买手"
+            dagRows={SHOPPERS_DAG_LEVELS.length}
+            left={<ShoppersSessionView />}
+            right={<ShoppersResultsPanel onCreateSame={createSame} />}
+          />
+        </ShoppersSnapshotWorkbenchProvider>
+        {deleteDialog}
+      </>
+    )
+  }
+  if (category === "science") {
+    return (
+      <>
+        <AiScienceSnapshotWorkbenchProvider snapshot={() => props.value.snapshot} artifactSource={source}>
+          <DedicatedCaseLayout
+            header={header}
+            persistKey="ai-for-science-panels"
+            label="AI for Science"
+            dagRows={AI_SCIENCE_DAG_LEVELS.length}
+            left={<AiScienceSessionView />}
+            right={<AiScienceResultsPanel onCreateSame={createSame} />}
+          />
+        </AiScienceSnapshotWorkbenchProvider>
         {deleteDialog}
       </>
     )
@@ -137,18 +269,30 @@ function CaseDetailContent(props: { value: LoadedCase }) {
         value={props.value}
         source={source}
         header={header}
-        historyStyle={props.value.detail.agentType === "deepinsight"}
+        historyStyle={category === "deep-research"}
       />
       {deleteDialog}
     </>
   )
 }
 
-function DeepTradingCaseLayout(props: { header: JSX.Element }) {
+function DedicatedCaseLayout(props: {
+  header: JSX.Element
+  left: JSX.Element
+  right: JSX.Element
+  persistKey?: string
+  label?: string
+  dagRows?: number
+}) {
   const desktop = createMediaQuery("(min-width: 768px)")
   const [state, setState] = createStore({ mobileView: "content" as "content" | "results" })
+  const results = () => props.dagRows ? (
+    <div class="case-dedicated-results size-full min-h-0" style={{ "--case-dag-height": `${props.dagRows * 42}px` }}>
+      {props.right}
+    </div>
+  ) : props.right
   return (
-    <div class="flex size-full min-h-0 flex-col overflow-hidden bg-[#f7f8fb]">
+    <div class="flex size-full min-h-0 flex-col overflow-hidden bg-[#f7f8fb]" classList={{ "max-md:pt-10": !!props.dagRows }}>
       {props.header}
       <div class="min-h-0 flex-1">
         <Show
@@ -156,14 +300,35 @@ function DeepTradingCaseLayout(props: { header: JSX.Element }) {
           fallback={
             <div class="flex size-full min-h-0 flex-col">
               <div class="grid h-10 shrink-0 grid-cols-2 border-b border-[#e0e4eb] bg-white p-1">
-                <button type="button" data-selected={state.mobileView === "content" ? "" : undefined} class="rounded-[6px] text-[12px] text-[#7a8498] data-[selected]:bg-[#edf3ff] data-[selected]:text-[#3474e8]" onClick={() => setState("mobileView", "content")}>分析内容</button>
-                <button type="button" data-selected={state.mobileView === "results" ? "" : undefined} class="rounded-[6px] text-[12px] text-[#7a8498] data-[selected]:bg-[#edf3ff] data-[selected]:text-[#3474e8]" onClick={() => setState("mobileView", "results")}>分析结果</button>
+                <button
+                  type="button"
+                  data-selected={state.mobileView === "content" ? "" : undefined}
+                  class="rounded-[6px] text-[12px] text-[#7a8498] data-[selected]:bg-[#edf3ff] data-[selected]:text-[#3474e8]"
+                  onClick={() => setState("mobileView", "content")}
+                >
+                  分析内容
+                </button>
+                <button
+                  type="button"
+                  data-selected={state.mobileView === "results" ? "" : undefined}
+                  class="rounded-[6px] text-[12px] text-[#7a8498] data-[selected]:bg-[#edf3ff] data-[selected]:text-[#3474e8]"
+                  onClick={() => setState("mobileView", "results")}
+                >
+                  分析结果
+                </button>
               </div>
-              <div class="min-h-0 flex-1 overflow-hidden">{state.mobileView === "content" ? <DeepTradingSessionView /> : <DeepTradingResultsPanel />}</div>
+              <div class="min-h-0 flex-1 overflow-hidden">
+                {state.mobileView === "content" ? props.left : results()}
+              </div>
             </div>
           }
         >
-          <DeepTradingSplitLayout left={<DeepTradingSessionView />} right={<DeepTradingResultsPanel />} />
+          <DeepTradingSplitLayout
+            left={props.left}
+            right={results()}
+            persistKey={props.persistKey}
+            label={props.label}
+          />
         </Show>
       </div>
     </div>
@@ -298,11 +463,7 @@ function GenericCaseLayout(props: {
 
         <div class="flex min-h-0 flex-1 overflow-hidden pb-[72px]">
           <main class="min-w-0 flex-1 overflow-y-auto bg-v2-background-bg-base px-4 py-5 max-sm:px-2">
-            <DataProvider
-              data={data()}
-              directory="case://workspace"
-              onNavigateToSession={(id) => setState("selectedSessionId", id)}
-            >
+              <DataProvider data={data()} directory="case://workspace" onNavigateToSession={(id) => setState("selectedSessionId", id)}>
               <div role="log" data-slot="session-turn-list" class="mx-auto flex w-full max-w-[800px] flex-col px-4">
                 <For each={userMessages()}>
                   {(message) => (
@@ -373,7 +534,11 @@ function GenericCaseLayout(props: {
               </div>
             </aside>
             <div class="min-h-0 flex-1 overflow-y-auto bg-[#f7f8fb] px-5 py-5 max-sm:px-3">
-              <DataProvider data={data()} directory="case://workspace" onNavigateToSession={(id) => setState("selectedSessionId", id)}>
+              <DataProvider
+                data={data()}
+                directory="case://workspace"
+                onNavigateToSession={(id) => setState("selectedSessionId", id)}
+              >
                 <div class="mx-auto w-full max-w-[900px] space-y-5">
                   <For each={userMessages()}>
                     {(message) => (
@@ -476,22 +641,33 @@ function snapshotData(snapshot: DockApiCaseSnapshot, frame: ReturnType<typeof ca
 
 function createCaseArtifactSource(baseUrl: string): DeepTradingArtifactSource {
   const [content, setContent] = createStore<Record<string, DeepTradingArtifactContent | undefined>>({})
+  const pending = new Map<string, Promise<void>>()
   const url = (path: string) => {
     const value = new URL(`${baseUrl}/artifacts/${path.split("/").map(encodeURIComponent).join("/")}`)
-    if (/\.html?$/i.test(path)) value.searchParams.set("runtime", new URL(echartsRuntimeUrl, window.location.origin).toString())
+    if (/\.html?$/i.test(path))
+      value.searchParams.set("runtime", new URL(echartsRuntimeUrl, window.location.origin).toString())
     return value.toString()
   }
   const load = async (path: string) => {
-    if (content[path]?.loaded || content[path]?.loading) return
+    if (untrack(() => content[path]?.loaded)) return
+    const current = pending.get(path)
+    if (current) return current
     setContent(path, { loaded: false, loading: true })
-    await fetch(url(path))
+    const task = fetch(url(path))
       .then(async (response) => {
         if (!response.ok) throw new Error(`文件读取失败，HTTP ${response.status}`)
         setContent(path, { loaded: true, loading: false, text: await response.text() })
       })
       .catch((error) => {
-        setContent(path, { loaded: false, loading: false, error: error instanceof Error ? error.message : String(error) })
+        setContent(path, {
+          loaded: false,
+          loading: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
       })
+      .finally(() => pending.delete(path))
+    pending.set(path, task)
+    await task
   }
   return {
     get: (path) => content[path],

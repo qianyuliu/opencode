@@ -5,12 +5,17 @@ import { ArtifactPreview } from "@/components/artifact-preview"
 import { useFile } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { showToast } from "@/utils/toast"
+import type { AgentArtifactSource } from "../agent-workbench/artifact-source"
 import type { SessionArtifact } from "../agent-workbench/model"
+import { SnapshotArtifactPreview, downloadBlob } from "../agent-workbench/snapshot-report-tabs"
 import { buildAiScienceArtifactTree, type AiScienceArtifactTreeNode } from "./data"
 import { useAiScienceWorkbench } from "./workbench-context"
 
 export function AiScienceFilesTab() {
   const context = useAiScienceWorkbench()
+  if (context.artifactSource) {
+    return <SnapshotAiScienceFilesTab source={context.artifactSource} />
+  }
   const file = useFile()
   const sdk = useSDK()
   const [state, setState] = createStore({
@@ -70,9 +75,7 @@ export function AiScienceFilesTab() {
                   <Icon name="file-tree" class="size-4 shrink-0 text-[#5871aa]" />
                   <strong class="truncate text-[12px] font-medium text-[#333a49]">科研产物</strong>
                 </span>
-                <small class="shrink-0 text-[10px] text-[#89909f]">
-                  {context.workbench().artifacts.length} 个文件
-                </small>
+                <small class="shrink-0 text-[10px] text-[#89909f]">{context.workbench().artifacts.length} 个文件</small>
               </header>
               <div class="deeptrading-scrollbar min-h-0 flex-1 overflow-y-auto py-1.5">
                 <ArtifactTree
@@ -127,6 +130,102 @@ export function AiScienceFilesTab() {
                     <ReportEmpty title="正在读取文件" description="请稍候。" />
                   </Match>
                 </Switch>
+              </div>
+            </div>
+          )}
+        </Show>
+      </Show>
+    </div>
+  )
+}
+
+function SnapshotAiScienceFilesTab(props: { source: AgentArtifactSource }) {
+  const context = useAiScienceWorkbench()
+  const [state, setState] = createStore({
+    selectedPath: undefined as string | undefined,
+    downloading: undefined as string | undefined,
+    expanded: {} as Record<string, boolean | undefined>,
+  })
+  const selected = createMemo(() =>
+    context.workbench().artifacts.find((artifact) => artifact.path === state.selectedPath),
+  )
+  const tree = createMemo(() => buildAiScienceArtifactTree(context.workbench().artifacts, context.artifactRoot()))
+
+  const download = (artifact: SessionArtifact) => {
+    setState("downloading", artifact.path)
+    void props.source
+      .download(artifact.path)
+      .then((blob) => downloadBlob(blob, artifact.filename))
+      .catch((error: unknown) => {
+        showToast({
+          variant: "error",
+          title: "文件下载失败",
+          description: error instanceof Error ? error.message : String(error),
+        })
+      })
+      .finally(() => setState("downloading", undefined))
+  }
+
+  return (
+    <div class="h-full min-h-0 overflow-hidden px-4 py-4">
+      <Show
+        when={context.workbench().artifacts.length > 0}
+        fallback={<ReportEmpty title="暂无文件产出" description="该案例快照没有保存科研产物文件。" />}
+      >
+        <Show
+          when={selected()}
+          fallback={
+            <div class="flex size-full min-h-0 flex-col overflow-hidden rounded-[8px] border border-[#e0e4eb] bg-white">
+              <header class="flex h-11 shrink-0 items-center justify-between border-b border-[#edf0f5] px-3">
+                <span class="flex min-w-0 items-center gap-2">
+                  <Icon name="file-tree" class="size-4 shrink-0 text-[#5871aa]" />
+                  <strong class="truncate text-[12px] font-medium text-[#333a49]">科研产物</strong>
+                </span>
+                <small class="shrink-0 text-[10px] text-[#89909f]">{context.workbench().artifacts.length} 个文件</small>
+              </header>
+              <div class="deeptrading-scrollbar min-h-0 flex-1 overflow-y-auto py-1.5">
+                <ArtifactTree
+                  nodes={tree()}
+                  depth={0}
+                  selectedPath={state.selectedPath}
+                  expanded={state.expanded}
+                  toggle={(path) => setState("expanded", path, !state.expanded[path])}
+                  select={(artifact) => setState("selectedPath", artifact.path)}
+                />
+              </div>
+            </div>
+          }
+        >
+          {(artifact) => (
+            <div class="flex size-full min-h-0 flex-col">
+              <header class="mb-3 flex min-w-0 items-center gap-2">
+                <button
+                  type="button"
+                  class="h-8 shrink-0 rounded-[6px] border border-[#d5dae5] bg-white px-2.5 text-[12px] text-[#5c6474] hover:bg-[#f5f7fa]"
+                  onClick={() => setState("selectedPath", undefined)}
+                >
+                  返回
+                </button>
+                <span class="min-w-0 flex-1">
+                  <strong class="block truncate text-[12px] font-medium leading-5 text-[#333a49]">
+                    {artifact().filename}
+                  </strong>
+                  <small class="block truncate text-[10px] leading-4 text-[#89909f]">
+                    {artifact().path} · {ownerLabel(artifact())}
+                  </small>
+                </span>
+                <button
+                  type="button"
+                  disabled={state.downloading !== undefined}
+                  class="flex h-8 shrink-0 items-center gap-1 rounded-[6px] border border-[#cbd7ef] bg-[#eef3fc] px-2.5 text-[12px] text-[#4e68a4] hover:bg-[#e5ecf9] disabled:opacity-50"
+                  onClick={() => download(artifact())}
+                >
+                  <Icon name="download" class="size-3.5" />
+                  下载
+                </button>
+              </header>
+              <div class="deeptrading-scrollbar min-h-0 flex-1 overflow-auto rounded-[8px] border border-[#e0e4eb] bg-white">
+                <SnapshotArtifactPreview path={artifact().path} source={props.source} />
               </div>
             </div>
           )}
@@ -223,15 +322,4 @@ function countFiles(node: AiScienceArtifactTreeNode): number {
 
 function ownerLabel(artifact: SessionArtifact) {
   return artifact.ownerAgentId ? `来源 ${artifact.ownerAgentId}` : "运行产物"
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement("a")
-  anchor.href = url
-  anchor.download = filename
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
-  URL.revokeObjectURL(url)
 }

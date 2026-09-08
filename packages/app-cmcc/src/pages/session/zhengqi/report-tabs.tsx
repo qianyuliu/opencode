@@ -7,7 +7,9 @@ import { useFile } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { artifactText } from "@/pages/session/artifact-preview"
 import { showToast } from "@/utils/toast"
+import type { AgentArtifactSource } from "../agent-workbench/artifact-source"
 import type { SessionArtifact } from "../agent-workbench/model"
+import { SnapshotFilesTab, SnapshotTextReportTab } from "../agent-workbench/snapshot-report-tabs"
 import { ZHENGQI_LEAD_AGENT } from "./config"
 import { parseZhengqiVisualReport } from "./visual-report"
 import { ZhengqiVisualReportView } from "./visual-report-view"
@@ -15,6 +17,21 @@ import { useZhengqiWorkbench } from "./workbench-context"
 
 export function ZhengqiFilesTab() {
   const context = useZhengqiWorkbench()
+  const ownerLabel = (agentId: string) => {
+    if (agentId === ZHENGQI_LEAD_AGENT) return "总览"
+    const agent = context.workbench().agents.find((item) => item.id === agentId)
+    return agent ? `${agent.profession} · ${agent.name}` : agentId || "未知来源"
+  }
+  if (context.artifactSource) {
+    return (
+      <SnapshotFilesTab
+        artifacts={() => context.workbench().artifacts}
+        source={context.artifactSource}
+        emptyDescription="该案例快照没有保存政企产物文件。"
+        ownerLabel={(artifact) => ownerLabel(artifact.ownerAgentId)}
+      />
+    )
+  }
   const file = useFile()
   const sdk = useSDK()
   const [state, setState] = createStore({
@@ -28,12 +45,6 @@ export function ZhengqiFilesTab() {
     const artifact = selected()
     return artifact ? file.get(artifact.path) : undefined
   })
-  const ownerLabel = (agentId: string) => {
-    if (agentId === ZHENGQI_LEAD_AGENT) return "总览"
-    const agent = context.workbench().agents.find((item) => item.id === agentId)
-    return agent ? `${agent.profession} · ${agent.name}` : agentId || "未知来源"
-  }
-
   createEffect(() => {
     const artifact = selected()
     if (artifact) void file.load(artifact.path)
@@ -159,6 +170,20 @@ export function ZhengqiFilesTab() {
 
 export function ZhengqiTextReportTab() {
   const context = useZhengqiWorkbench()
+  if (context.artifactSource) {
+    return (
+      <SnapshotTextReportTab
+        path={() => context.workbench().textReportPath}
+        source={context.artifactSource}
+        replaying={context.replay.isReplaying}
+        replayMarkdown={context.replay.textReportMarkdown}
+        cacheKey={() =>
+          `${context.workbench().rootSessionId}:zhengqi-case-report${context.replay.isReplaying() ? ":replay" : ""}`
+        }
+        emptyDescription="案例快照中没有 20-report.md。"
+      />
+    )
+  }
   const file = useFile()
   const path = createMemo(() => context.workbench().textReportPath)
   const state = createMemo(() => (path() ? file.get(path()!) : undefined))
@@ -208,6 +233,9 @@ export function ZhengqiTextReportTab() {
 
 export function ZhengqiVisualReportTab() {
   const context = useZhengqiWorkbench()
+  if (context.artifactSource) {
+    return <SnapshotZhengqiVisualReportTab source={context.artifactSource} />
+  }
   const file = useFile()
   const path = createMemo(() => context.workbench().visualReportPath)
   const state = createMemo(() => (path() ? file.get(path()!) : undefined))
@@ -234,6 +262,54 @@ export function ZhengqiVisualReportTab() {
               <ZhengqiVisualReportView
                 report={report()}
                 cacheKey={`${context.workbench().rootSessionId}:zhengqi-visual`}
+              />
+            )}
+          </Match>
+          <Match when={parsed()?.error}>
+            {(error) => <ReportEmpty title="可视化报告格式暂不支持" description={error()} />}
+          </Match>
+          <Match when={state()?.error}>
+            {(error) => <ReportEmpty title="可视化报告读取失败" description={error()} />}
+          </Match>
+          <Match when={true}>
+            <ReportEmpty title="正在读取可视化报告" description="请稍候。" />
+          </Match>
+        </Switch>
+      </Show>
+    </div>
+  )
+}
+
+function SnapshotZhengqiVisualReportTab(props: { source: AgentArtifactSource }) {
+  const context = useZhengqiWorkbench()
+  const path = createMemo(() => context.workbench().visualReportPath)
+
+  createEffect(() => {
+    const value = path()
+    if (value) void props.source.load(value)
+  })
+
+  const state = createMemo(() => {
+    const value = path()
+    return value ? props.source.get(value) : undefined
+  })
+  const parsed = createMemo(() => {
+    const text = state()?.text
+    return text === undefined ? undefined : parseZhengqiVisualReport(text)
+  })
+
+  return (
+    <div class="deeptrading-scrollbar h-full min-h-0 overflow-y-auto bg-[#f7f8fb] px-4 py-4">
+      <Show
+        when={path()}
+        fallback={<ReportEmpty title="可视化报告尚未生成" description="案例快照中没有 25-visual-report.json。" />}
+      >
+        <Switch>
+          <Match when={parsed()?.report}>
+            {(report) => (
+              <ZhengqiVisualReportView
+                report={report()}
+                cacheKey={`${context.workbench().rootSessionId}:zhengqi-case-visual`}
               />
             )}
           </Match>
