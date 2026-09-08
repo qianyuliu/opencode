@@ -283,10 +283,16 @@ for (const input of cases) {
       const reputation = dag.getByRole("button", { name: /口碑分析员/ })
       await expect(price).toHaveAttribute("data-status", "waiting")
       const top = (element: Element) => element.getBoundingClientRect().top
-      expect(await price.evaluate(top)).toBeGreaterThan(await discovery.evaluate(top))
+      expect(Math.abs((await price.evaluate(top)) - (await discovery.evaluate(top)))).toBeLessThan(1)
+      const left = (element: Element) => element.getBoundingClientRect().left
+      expect(await price.evaluate(left)).toBeGreaterThan(await discovery.evaluate(left))
       expect(await price.evaluate(top)).toBeLessThan(await reputation.evaluate(top))
       await price.click()
       await expect(page.getByRole("heading", { name: "阿比", exact: true })).toBeVisible()
+    }
+    if (["government", "recommendation"].includes(input.category)) {
+      await expectRightFold(page, input.experts)
+      await page.locator("[data-serial-dag]").screenshot({ path: `e2e/test-results/case-${input.category}-dag.png` })
     }
     await expect(page.locator('[contenteditable="true"], textarea')).toHaveCount(0)
     await page.screenshot({ path: `e2e/test-results/case-${input.category}-desktop.png`, fullPage: true })
@@ -347,10 +353,38 @@ for (const input of cases) {
       )
     })
     expect(overlapping).toBe(false)
+    if (["government", "recommendation"].includes(input.category)) await expectRightFold(page, input.experts)
     await page.screenshot({ path: `e2e/test-results/case-${input.category}-mobile.png`, fullPage: true })
     expect(state.apiRequests.filter((value) => /\/session\/case-|\/file\//.test(value))).toEqual([])
     expect(state.errors).toEqual([])
   })
+}
+
+async function expectRightFold(page: Page, count: number) {
+  const dag = page.locator("[data-serial-dag]")
+  await expect(dag.locator("button")).toHaveCount(count)
+  await expect(dag.locator("path[data-edge]")).toHaveCount(count - 1)
+  await expect
+    .poll(() =>
+      dag.evaluate((element) => {
+        const points = [...element.querySelectorAll("button")].map((node) => node.getBoundingClientRect())
+        const split = Math.ceil(points.length / 2)
+        const upper = points.slice(0, split)
+        const lower = points.slice(split)
+        return {
+          upperRight: upper.every((point, index) => index === 0 || point.left > upper[index - 1].left),
+          lowerLeft: lower.every((point, index) => index === 0 || point.left < lower[index - 1].left),
+          twoRows:
+            upper.every((point) => Math.abs(point.top - upper[0].top) < 1) &&
+            lower.every((point) => Math.abs(point.top - lower[0].top) < 1 && point.top > upper[0].bottom),
+          rightTurn: Math.abs(upper[upper.length - 1].right - lower[0].right) < 1,
+          textFits: [...element.querySelectorAll("button")].every(
+            (button) => button.scrollHeight <= button.clientHeight + 1 && button.scrollWidth <= button.clientWidth + 1,
+          ),
+        }
+      }),
+    )
+    .toEqual({ upperRight: true, lowerLeft: true, twoRows: true, rightTurn: true, textFits: true })
 }
 
 test("snapshot report failure shows an error without repeated fetches", async ({ page }) => {

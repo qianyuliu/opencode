@@ -4,6 +4,6 @@
   scrollbar-color: #bdc9df transparent;
 }
 
-.case-dedicated-results section[aria-label$="DAG"] > div {
+.case-dedicated-results section[aria-label$="DAG"]:not([data-serial-dag]) > div {
   min-height: var(--case-dag-height);
 }

@@ -1,0 +1,130 @@
+.serial-agent-dag {
+  min-height: 0;
+  overflow: auto;
+  background: #f9fbff;
+  container-type: inline-size;
+}
+
+.serial-agent-dag .serial-dag-surface {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 860px;
+  min-width: var(--serial-min-width);
+  height: 100%;
+  min-height: 280px;
+  margin: 0 auto;
+  padding: 14px 28px 14px 8px;
+}
+
+.serial-agent-dag .serial-dag-connections {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.serial-agent-dag .serial-dag-rows {
+  position: relative;
+  display: grid;
+  height: 100%;
+  min-height: 0;
+}
+
+.serial-agent-dag .serial-dag-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 0;
+}
+
+.serial-agent-dag .serial-dag-row[data-reversed] {
+  flex-direction: row-reverse;
+}
+
+.serial-agent-dag .serial-dag-node {
+  position: relative;
+  display: flex;
+  flex: 0 0 var(--serial-node-width);
+  align-items: center;
+  gap: 6px;
+  min-width: 54px;
+  max-width: 154px;
+  height: 56px;
+  padding: 5px;
+  border: 1px solid #cfdaee;
+  border-radius: 28px;
+  background: #fff;
+  color: #303746;
+  text-align: left;
+  box-shadow: 0 2px 8px rgba(45, 68, 112, 0.06);
+  transition:
+    border-color 150ms,
+    background-color 150ms,
+    box-shadow 150ms;
+}
+
+.serial-agent-dag .serial-dag-label {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.serial-agent-dag .serial-dag-label strong {
+  display: block;
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.serial-agent-dag .serial-dag-label small {
+  display: block;
+  font-size: 9px;
+  line-height: 12px;
+  color: #8992a3;
+}
+
+.serial-agent-dag .serial-dag-node[data-status="completed"] {
+  border-color: #a9d8c2;
+}
+.serial-agent-dag .serial-dag-node[data-status="failed"] {
+  border-color: #e6aaaa;
+}
+.serial-agent-dag .serial-dag-node[data-status="running"] {
+  border-color: #91abe2;
+}
+.serial-agent-dag .serial-dag-node:hover {
+  border-color: #8fa9df;
+}
+.serial-agent-dag .serial-dag-node[data-selected],
+.serial-agent-dag .serial-dag-node:focus-visible {
+  border-color: #6687d6;
+  background: #f1f5ff;
+  box-shadow: 0 0 0 2px rgba(82, 113, 183, 0.12);
+}
+
+@container (max-width: 680px) {
+  .serial-agent-dag[data-columns="5"] .serial-dag-node {
+    height: 108px;
+    flex-direction: column;
+    gap: 4px;
+    border-radius: 8px;
+    text-align: center;
+  }
+}
+
+@container (max-width: 360px) {
+  .serial-agent-dag .serial-dag-node {
+    height: 108px;
+    flex-direction: column;
+    gap: 4px;
+    border-radius: 8px;
+    text-align: center;
+  }
+}

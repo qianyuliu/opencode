@@ -1,21 +1,18 @@
 import { Icon } from "@opencode-ai/ui/icon"
-import { For, Match, Show, Switch, createMemo, createSignal, onCleanup, onMount } from "solid-js"
-import type { AgentNodeStatus } from "../agent-workbench/model"
-import { AgentAvatar, StatusBadge } from "../deeptrading/deeptrading-session-view"
+import { For, Match, Show, Switch, createMemo } from "solid-js"
+import { SerialAgentDag } from "../agent-workbench/serial-agent-dag"
+import { StatusBadge } from "../deeptrading/deeptrading-session-view"
 import { SHOPPERS_DAG_EDGES, SHOPPERS_DAG_LEVELS, SHOPPERS_REQUIRED_MEMBER_IDS, shoppersAvatar } from "./config"
 import { isShoppersDagEdgeActive, shoppersProgress } from "./data"
 import { useShoppersWorkbench } from "./workbench-context"
 
 export function ShoppersTeamTab() {
   const context = useShoppersWorkbench()
-  const nodes = createMemo(() => new Map(context.workbench().agents.map((agent) => [agent.id, agent])))
   const progress = createMemo(() =>
     context.workbench().loading
       ? 0
       : shoppersProgress({ nodes: context.workbench().agents, requiredAgentIds: SHOPPERS_REQUIRED_MEMBER_IDS }),
   )
-  let dagContainer: HTMLDivElement | undefined
-  const dagNodes = new Map<string, HTMLButtonElement>()
   const stats = createMemo(() => {
     const data = context.workbench()
     const tokenCount = data.stats.tokenCount
@@ -69,55 +66,16 @@ export function ShoppersTeamTab() {
       </section>
 
       <div class="grid min-h-0 flex-1 grid-rows-[minmax(0,2fr)_auto_minmax(0,1fr)] overflow-hidden rounded-[8px] border border-[#dfe4ed] bg-white">
-        <section aria-label="推荐分析 DAG" class="min-h-0 overflow-hidden bg-[#f9fbff] px-3 py-1">
-          <div ref={dagContainer} class="relative mx-auto h-full w-full max-w-[860px]">
-            <DagConnections
-              getContainer={() => dagContainer}
-              getNode={(agentId) => dagNodes.get(agentId)}
-              nodes={nodes()}
-            />
-            <div
-              class="relative z-10 grid h-full min-h-0"
-              style={{ "grid-template-rows": `repeat(${SHOPPERS_DAG_LEVELS.length}, minmax(0, 1fr))` }}
-            >
-              <For each={SHOPPERS_DAG_LEVELS}>
-                {(level) => (
-                  <div
-                    class="grid min-h-0 items-center gap-2"
-                    style={{ "grid-template-columns": `repeat(${level.length}, minmax(0, 1fr))` }}
-                  >
-                    <For each={level}>
-                      {(agentId) => {
-                        const node = createMemo(() => nodes().get(agentId))
-                        return (
-                          <button
-                            type="button"
-                            data-status={node()?.status ?? "waiting"}
-                            data-selected={context.selectedAgentId() === agentId ? "" : undefined}
-                            class="relative mx-auto flex h-[clamp(34px,76%,44px)] w-full max-w-[154px] min-w-0 items-center gap-1.5 rounded-full border border-[#cfdaee] bg-white px-1 py-1 text-left shadow-[0_2px_8px_rgba(45,68,112,0.06)] transition hover:border-[#8fa9df] hover:shadow-[0_4px_12px_rgba(45,68,112,0.10)] data-[selected]:border-[#6687d6] data-[selected]:bg-[#f1f5ff] data-[selected]:shadow-[0_0_0_2px_rgba(82,113,183,0.12)] data-[status=completed]:border-[#a9d8c2] data-[status=failed]:border-[#e6aaaa] data-[status=running]:border-[#91abe2]"
-                            title={`${node()?.profession ?? agentId} · ${node()?.name ?? agentId}`}
-                            ref={(element) => dagNodes.set(agentId, element)}
-                            onClick={() => context.selectAgent(agentId)}
-                          >
-                            <AgentAvatar src={shoppersAvatar(agentId)} name={node()?.name ?? "?"} size="compact" />
-                            <span class="min-w-0 flex-1">
-                              <strong class="block truncate text-[10px] font-semibold leading-4 text-[#303746]">
-                                {node()?.profession ?? "等待会话"}
-                              </strong>
-                              <small class="block truncate text-[9px] leading-3 text-[#8992a3]">
-                                {node()?.name ?? agentId}
-                              </small>
-                            </span>
-                          </button>
-                        )
-                      }}
-                    </For>
-                  </div>
-                )}
-              </For>
-            </div>
-          </div>
-        </section>
+        <SerialAgentDag
+          label="推荐分析 DAG"
+          order={SHOPPERS_DAG_LEVELS.flat()}
+          edges={SHOPPERS_DAG_EDGES}
+          nodes={context.workbench().agents}
+          selectedAgentId={context.selectedAgentId()}
+          onSelect={context.selectAgent}
+          avatar={shoppersAvatar}
+          isEdgeActive={isShoppersDagEdgeActive}
+        />
 
         <section class="flex shrink-0 items-center gap-3 border-y border-[#e2e7f0] bg-[#fbfcff] px-4 py-2.5">
           <h3 class="m-0 shrink-0 text-[12px] font-semibold leading-5 text-[#4563a5]">分析流程：</h3>
@@ -185,120 +143,6 @@ function DetailEmpty(props: { children: string | string[] }) {
       {props.children}
     </div>
   )
-}
-
-const DAG_VIEWBOX_WIDTH = 1_000
-const DAG_VIEWBOX_HEIGHT = 1_000
-
-type DagPath = { key: string; d: string }
-
-function DagConnections(props: {
-  getContainer: () => HTMLDivElement | undefined
-  getNode: (agentId: string) => HTMLButtonElement | undefined
-  nodes: ReadonlyMap<string, { status: AgentNodeStatus }>
-}) {
-  const [paths, setPaths] = createSignal<DagPath[]>([])
-  const activePaths = createMemo(() => {
-    const keys = new Set(
-      SHOPPERS_DAG_EDGES.filter(([source, target]) =>
-        isShoppersDagEdgeActive(props.nodes.get(source)?.status, props.nodes.get(target)?.status),
-      ).map(([source, target]) => edgeKey(source, target)),
-    )
-    return paths().filter((path) => keys.has(path.key))
-  })
-
-  onMount(() => {
-    let disposed = false
-    const update = () => {
-      const container = props.getContainer()
-      if (!container) return
-      const containerRect = container.getBoundingClientRect()
-      setPaths(
-        SHOPPERS_DAG_EDGES.flatMap(([sourceId, targetId]) => {
-          const source = props.getNode(sourceId)
-          const target = props.getNode(targetId)
-          if (!source || !target || containerRect.width === 0 || containerRect.height === 0) return []
-          return [{ key: edgeKey(sourceId, targetId), d: edgePath(source, target, containerRect) }]
-        }),
-      )
-    }
-    const schedule = () => queueMicrotask(() => !disposed && update())
-    schedule()
-    if (typeof ResizeObserver === "undefined") return
-    const observer = new ResizeObserver(schedule)
-    const container = props.getContainer()
-    if (container) observer.observe(container)
-    for (const agentId of SHOPPERS_DAG_LEVELS.flat()) {
-      const node = props.getNode(agentId)
-      if (node) observer.observe(node)
-    }
-    onCleanup(() => {
-      disposed = true
-      observer.disconnect()
-    })
-  })
-
-  return (
-    <svg
-      aria-hidden="true"
-      class="pointer-events-none absolute inset-0 z-0 size-full"
-      viewBox={`0 0 ${DAG_VIEWBOX_WIDTH} ${DAG_VIEWBOX_HEIGHT}`}
-      preserveAspectRatio="none"
-    >
-      <g
-        fill="none"
-        stroke="#c5ccd8"
-        stroke-width="1.2"
-        stroke-dasharray="5 4"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        vector-effect="non-scaling-stroke"
-      >
-        <For each={paths()}>{(path) => <path d={path.d} />}</For>
-      </g>
-      <g
-        fill="none"
-        stroke="#4f7df3"
-        stroke-width="1.5"
-        stroke-dasharray="5 4"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        vector-effect="non-scaling-stroke"
-      >
-        <For each={activePaths()}>{(path) => <path d={path.d} />}</For>
-      </g>
-    </svg>
-  )
-}
-
-function edgeKey(sourceId: string, targetId: string) {
-  return `${sourceId}->${targetId}`
-}
-
-function edgePath(source: HTMLButtonElement, target: HTMLButtonElement, container: DOMRect) {
-  const sourceRect = source.getBoundingClientRect()
-  const targetRect = target.getBoundingClientRect()
-  const sourcePoint = toPoint(sourceRect.left + sourceRect.width / 2, sourceRect.bottom, container)
-  const targetPoint = toPoint(targetRect.left + targetRect.width / 2, targetRect.top, container)
-  if (sourcePoint.x === targetPoint.x) return `M ${sourcePoint.x} ${sourcePoint.y} V ${targetPoint.y}`
-  const middleY = (sourcePoint.y + targetPoint.y) / 2
-  const direction = targetPoint.x > sourcePoint.x ? 1 : -1
-  const radius = Math.min(10, Math.abs(targetPoint.x - sourcePoint.x) / 2, Math.abs(targetPoint.y - sourcePoint.y) / 4)
-  return [
-    `M ${sourcePoint.x} ${sourcePoint.y}`,
-    `V ${middleY - radius}`,
-    `Q ${sourcePoint.x} ${middleY} ${sourcePoint.x + direction * radius} ${middleY}`,
-    `H ${targetPoint.x - direction * radius}`,
-    `Q ${targetPoint.x} ${middleY} ${targetPoint.x} ${middleY + radius}`,
-    `V ${targetPoint.y}`,
-  ].join(" ")
-}
-
-function toPoint(x: number, y: number, container: DOMRect) {
-  return {
-    x: ((x - container.left) / container.width) * DAG_VIEWBOX_WIDTH,
-    y: ((y - container.top) / container.height) * DAG_VIEWBOX_HEIGHT,
-  }
 }
 
 function formatElapsed(milliseconds: number) {
