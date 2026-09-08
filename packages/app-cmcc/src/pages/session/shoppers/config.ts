@@ -17,6 +17,7 @@ export const SHOPPERS_CARD_EDITOR_AGENT = "shoppers-pro/card-editor"
 export const SHOPPERS_DAG_LEVELS = [
   ["shoppers-pro/need-insight"],
   ["shoppers-pro/product-discoverer"],
+  ["shoppers-pro/price-analyst"],
   ["shoppers-pro/reputation-scout"],
   ["shoppers-pro/card-editor"],
 ] as const

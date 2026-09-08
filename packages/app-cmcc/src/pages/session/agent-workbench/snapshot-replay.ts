@@ -144,7 +144,7 @@ export function createCaseSnapshotReplay(input: {
 
   createEffect(
     on(
-      () => input.workbench().rootSessionId,
+      createMemo(() => input.workbench().rootSessionId),
       () => stop(),
       { defer: true },
     ),

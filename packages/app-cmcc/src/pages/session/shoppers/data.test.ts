@@ -8,9 +8,17 @@ import {
   shoppersProgress,
 } from "./data"
 
+const agentIds = [
+  "shoppers-pro/need-insight",
+  "shoppers-pro/product-discoverer",
+  "shoppers-pro/price-analyst",
+  "shoppers-pro/reputation-scout",
+  "shoppers-pro/card-editor",
+]
+
 const nodes = (completed: number): AgentNodeView[] =>
-  Array.from({ length: 4 }, (_, index) => ({
-    id: `agent-${index + 1}`,
+  agentIds.map((id, index) => ({
+    id,
     name: `Agent ${index + 1}`,
     profession: "专家",
     status: index < completed ? "completed" : "waiting",
@@ -18,10 +26,21 @@ const nodes = (completed: number): AgentNodeView[] =>
   }))
 
 describe("Shoppers Pro workbench data", () => {
-  test("requires all four experts before progress reaches 100 percent", () => {
-    const required = nodes(4).map((node) => node.id)
-    expect(shoppersProgress({ nodes: nodes(3), requiredAgentIds: required })).toBe(75)
-    expect(shoppersProgress({ nodes: nodes(4), requiredAgentIds: required })).toBe(100)
+  test("requires all five experts before progress reaches 100 percent", () => {
+    expect(shoppersProgress({ nodes: nodes(4), requiredAgentIds: agentIds })).toBe(80)
+    expect(shoppersProgress({ nodes: nodes(5), requiredAgentIds: agentIds })).toBe(100)
+  })
+
+  test("keeps historical four-agent runs at 80 percent when price analysis is absent", () => {
+    const historical = nodes(5).filter((node) => node.id !== "shoppers-pro/price-analyst")
+    expect(shoppersProgress({ nodes: historical, requiredAgentIds: agentIds })).toBe(80)
+    const waitingPrice = nodes(5).map(
+      (node): AgentNodeView => ({
+        ...node,
+        status: node.id === "shoppers-pro/price-analyst" ? "waiting" : node.status,
+      }),
+    )
+    expect(shoppersProgress({ nodes: waitingPrice, requiredAgentIds: agentIds })).toBe(80)
   })
 
   test("counts only structurally valid final recommendation products", () => {

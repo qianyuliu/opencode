@@ -26,7 +26,7 @@ const cases = [
     lead: "shoppers-pro/shoppers-pro-team-lead",
     member: "shoppers-pro/card-editor",
     category: "recommendation",
-    experts: 4,
+    experts: 5,
   },
   {
     type: "ai-for-science-team",
@@ -275,6 +275,19 @@ for (const input of cases) {
     const state = await prepare(page, input)
     await expect(page.getByRole("button", { name: "分析团队", exact: true })).toBeVisible()
     await expect(page.getByText(`${input.experts} 位`, { exact: true })).toBeVisible()
+    if (input.category === "recommendation") {
+      const dag = page.locator('section[aria-label="推荐分析 DAG"]')
+      await expect(dag.locator("button")).toHaveCount(5)
+      const price = dag.getByRole("button", { name: /价格分析师/ })
+      const discovery = dag.getByRole("button", { name: /商品发现师/ })
+      const reputation = dag.getByRole("button", { name: /口碑分析员/ })
+      await expect(price).toHaveAttribute("data-status", "waiting")
+      const top = (element: Element) => element.getBoundingClientRect().top
+      expect(await price.evaluate(top)).toBeGreaterThan(await discovery.evaluate(top))
+      expect(await price.evaluate(top)).toBeLessThan(await reputation.evaluate(top))
+      await price.click()
+      await expect(page.getByRole("heading", { name: "阿比", exact: true })).toBeVisible()
+    }
     await expect(page.locator('[contenteditable="true"], textarea')).toHaveCount(0)
     await page.screenshot({ path: `e2e/test-results/case-${input.category}-desktop.png`, fullPage: true })
     await page.getByRole("button", { name: "文字报告", exact: true }).click()
