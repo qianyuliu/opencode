@@ -39,6 +39,26 @@ describe("theme preload", () => {
 
     expect(document.documentElement.dataset.colorScheme).toBe("light")
     expect(localStorage.getItem("opencode-color-scheme")).toBe("light")
+    expect(localStorage.getItem("opencode-cmcc-light-default-v1")).toBe("1")
+  })
+
+  test("migrates the legacy system default to light once", () => {
+    localStorage.setItem("opencode-color-scheme", "system")
+    Object.defineProperty(window, "matchMedia", {
+      value: () => ({ matches: true }) as MediaQueryList,
+      configurable: true,
+    })
+
+    run()
+
+    expect(document.documentElement.dataset.colorScheme).toBe("light")
+    expect(localStorage.getItem("opencode-color-scheme")).toBe("light")
+
+    localStorage.setItem("opencode-color-scheme", "system")
+    run()
+
+    expect(document.documentElement.dataset.colorScheme).toBe("dark")
+    expect(localStorage.getItem("opencode-color-scheme")).toBe("system")
   })
 
   test("keeps cached css for non-default themes", () => {

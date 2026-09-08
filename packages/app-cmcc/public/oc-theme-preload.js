@@ -9,11 +9,17 @@
     localStorage.removeItem("opencode-theme-css-dark")
   }
 
-  var scheme = localStorage.getItem("opencode-color-scheme")
+  var schemeKey = "opencode-color-scheme"
+  var lightDefaultMigrationKey = "opencode-cmcc-light-default-v1"
+  var scheme = localStorage.getItem(schemeKey)
+  if (!localStorage.getItem(lightDefaultMigrationKey)) {
+    if (!scheme || scheme === "system") scheme = "light"
+    localStorage.setItem(lightDefaultMigrationKey, "1")
+  }
   if (!scheme) {
     scheme = "light"
-    localStorage.setItem("opencode-color-scheme", "light")
   }
+  localStorage.setItem(schemeKey, scheme)
   var isDark = scheme === "dark" || (scheme === "system" && matchMedia("(prefers-color-scheme: dark)").matches)
   var mode = isDark ? "dark" : "light"
 
