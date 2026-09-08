@@ -8,7 +8,8 @@ import {
   type Accessor,
   type ParentProps,
 } from "solid-js"
-import { createStore } from "solid-js/store"
+import { createStore, reconcile } from "solid-js/store"
+import { createWorkbenchRuntime } from "../agent-workbench/runtime"
 import { useFile } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
@@ -350,9 +351,23 @@ export function ZhengqiWorkbenchProvider(
       parts: rootData.parts,
     })
   })
-  const running = createMemo(
-    () => overviewStatus() === "running" || nodeResult().agentNodes.some((node) => node.status === "running"),
-  )
+  const runtime = createWorkbenchRuntime({
+    active: props.active,
+    loading: () => state.loading,
+    root: rootTranscript,
+    children: childTranscripts,
+    async fetchStatuses() {
+      const response = await sdk().client.session.status()
+      if (!response.data) throw new Error("Session status response is unavailable")
+      return response.data
+    },
+    setStatus: (sessionId, status) => sync().set("session_status", sessionId, reconcile(status)),
+    async reloadSession(sessionId, isCurrent) {
+      await pending.get(sessionId)?.catch(() => undefined)
+      if (isCurrent()) await ensureComplete(sessionId, true)
+    },
+  })
+  const running = runtime.running
   const discovery = createMemo(() => {
     const root = rootTranscript()
     if (!root) return { artifacts: [], ambiguities: [] }
@@ -417,7 +432,7 @@ export function ZhengqiWorkbenchProvider(
       artifacts: artifacts.artifacts,
       textReportPath: reportFiles.text?.path,
       visualReportPath: reportFiles.visual?.path,
-      ambiguities: [...nodes.ambiguities, ...artifacts.ambiguities],
+      ambiguities: [...nodes.ambiguities, ...artifacts.ambiguities, ...(runtime.warning() ? [runtime.warning()!] : [])],
       loading: state.loading,
       error: state.error,
     }
@@ -425,6 +440,7 @@ export function ZhengqiWorkbenchProvider(
 
   const canReplay = createMemo(() => {
     const source = actualWorkbench()
+    if (runtime.syncing() || runtime.warning() || source.agents.some((agent) => agent.status === "running")) return false
     if (!props.active() || state.loading || source.loading || source.error || running()) return false
     if (source.overviewStatus !== "completed") return false
     return !!(
