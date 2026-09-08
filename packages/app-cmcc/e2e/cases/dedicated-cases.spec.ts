@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test"
+import JSZip from "jszip"
 import type { DockApiCaseSnapshot } from "../../src/context/dockapi"
 import { mockOpenCodeServer } from "../utils/mock-server"
 import { fixture } from "../smoke/session-timeline.fixture"
@@ -105,7 +106,7 @@ function snapshot(input: CaseInput): DockApiCaseSnapshot {
   const child = entry("case-child", input.member, "case-root")
   const filenames =
     input.category === "science"
-      ? ["writing/paper.md", "figures/chart.svg"]
+      ? ["writing/paper.md", "figures/chart.svg", "reports/view.html"]
       : ["20-report.md", "25-visual-report.json", "06-consolidated-issues.json"]
   for (const path of filenames) {
     child.messages[1].parts.push({
@@ -138,7 +139,11 @@ function snapshot(input: CaseInput): DockApiCaseSnapshot {
   }
 }
 
-async function prepare(page: Page, input: CaseInput, options: { fileError?: boolean } = {}) {
+async function prepare(
+  page: Page,
+  input: CaseInput,
+  options: { fileError?: boolean; inspectionHtml?: boolean; wordReport?: boolean } = {},
+) {
   const apiRequests: string[] = []
   const errors: string[] = []
   page.on("pageerror", (error) => errors.push(error.message))
@@ -147,8 +152,33 @@ async function prepare(page: Page, input: CaseInput, options: { fileError?: bool
       apiRequests.push(request.method() + " " + new URL(request.url()).pathname)
   })
   await mockOpenCodeServer(page, { ...fixture, sessions: [], pageMessages: () => ({ items: [] }) })
-  await page.addInitScript(() => localStorage.setItem("dockapi.accessToken", "case-ui-test-token"))
+  await page.addInitScript(() => {
+    if (window === window.top) localStorage.setItem("dockapi.accessToken", "case-ui-test-token")
+  })
   const snap = snapshot(input)
+  const wordArchive = options.wordReport ? new JSZip() : undefined
+  wordArchive?.file(
+    "[Content_Types].xml",
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+  )
+  wordArchive?.file(
+    "_rels/.rels",
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+  )
+  wordArchive?.file(
+    "word/document.xml",
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>案例 Word 正文</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:body></w:document>',
+  )
+  const wordBuffer = await wordArchive?.generateAsync({ type: "nodebuffer" })
+  if (wordBuffer)
+    snap.artifacts.push({
+      path: "writing/report.docx",
+      size: wordBuffer.length,
+      contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    })
+  if (options.inspectionHtml) {
+    snap.artifacts.push({ path: "reports/inspection.html", size: 120, contentType: "text/html" })
+  }
   const metadata = {
     ...snap,
     caseName: `测试案例-${input.category}`,
@@ -185,6 +215,22 @@ async function prepare(page: Page, input: CaseInput, options: { fileError?: bool
       if (options.fileError)
         return route.fulfill({ status: 404, body: "missing", headers: { "access-control-allow-origin": "*" } })
       let body = reportText
+      if (path.endsWith("report.docx") && wordBuffer)
+        return route.fulfill({
+          contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          headers: { "access-control-allow-origin": "*" },
+          body: wordBuffer,
+        })
+      if (path.endsWith("inspection.html"))
+        return route.fulfill({
+          contentType: "text/html; charset=utf-8",
+          body: "<!doctype html><html><body>巡查 HTML 优先预览</body></html>",
+        })
+      if (path.endsWith("view.html"))
+        return route.fulfill({
+          contentType: "text/html; charset=utf-8",
+          body: '<!doctype html><html><body>科研可视化测试<img src="../figures/chart.svg" alt="案例图表"></body></html>',
+        })
       if (path.endsWith("06-consolidated-issues.json")) body = JSON.stringify({ statistics: { total_issues: 7 } })
       if (path.endsWith("25-visual-report.json")) {
         const blocks = [
@@ -232,8 +278,7 @@ for (const input of cases) {
     await expect(page.locator('[contenteditable="true"], textarea')).toHaveCount(0)
     await page.screenshot({ path: `e2e/test-results/case-${input.category}-desktop.png`, fullPage: true })
     await page.getByRole("button", { name: "文字报告", exact: true }).click()
-    if (input.category === "science") await expect(page.getByText("文字报告尚未生成", { exact: true })).toBeVisible()
-    else await expect(page.getByText("只读快照报告正文。", { exact: true })).toBeVisible()
+    await expect(page.getByText("只读快照报告正文。", { exact: true })).toBeVisible()
     await page.getByRole("button", { name: "可视化报告", exact: true }).click()
     if (["government", "inspection"].includes(input.category)) {
       await expect(page.getByText("图表测试正文", { exact: true })).toBeVisible()
@@ -247,6 +292,12 @@ for (const input of cases) {
         )
         .toBe(true)
       await page.screenshot({ path: `e2e/test-results/case-${input.category}-visual.png`, fullPage: true })
+    } else if (input.category === "science") {
+      const report = page.frameLocator('iframe[title="view.html"]')
+      await expect(report.getByText("科研可视化测试", { exact: true })).toBeVisible()
+      await expect
+        .poll(() => report.getByRole("img", { name: "案例图表" }).evaluate((img: HTMLImageElement) => img.naturalWidth))
+        .toBeGreaterThan(0)
     } else
       await expect(
         page.getByText(input.category === "science" ? "可视化报告尚未生成" : "可视化报告格式暂未适配", { exact: true }),
@@ -295,6 +346,31 @@ test("snapshot report failure shows an error without repeated fetches", async ({
   await expect(page.getByText("文字报告读取失败", { exact: true })).toBeVisible()
   await page.waitForTimeout(1000)
   expect(state.fileRequests.filter((path) => path.endsWith("20-report.md"))).toHaveLength(1)
+  expect(state.errors).toEqual([])
+})
+
+test("science case switches between Markdown and a real DOCX snapshot", async ({ page }) => {
+  const state = await prepare(page, cases[3], { wordReport: true })
+  await page.getByRole("button", { name: "文字报告", exact: true }).click()
+  await page.getByRole("button", { name: "report.docx", exact: true }).click()
+  await expect(page.getByText("案例 Word 正文", { exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "paper.md", exact: true }).click()
+  await expect(page.getByText("只读快照报告正文。", { exact: true })).toBeVisible()
+  expect(state.fileRequests.filter((path) => path.endsWith("report.docx"))).toHaveLength(1)
+  expect(state.apiRequests.filter((value) => /\/session\/case-|\/file\//.test(value))).toEqual([])
+  expect(state.errors).toEqual([])
+})
+
+test("inspection HTML takes priority over JSON and uses the case preview ticket", async ({ page }) => {
+  const state = await prepare(page, cases[0], { inspectionHtml: true })
+  await page.getByRole("button", { name: "可视化报告", exact: true }).click()
+  await expect(page.frameLocator('iframe[title="inspection.html"]').getByText("巡查 HTML 优先预览")).toBeVisible()
+  await expect(page.locator('iframe[title="inspection.html"]')).toHaveAttribute(
+    "src",
+    /\/api\/dockapi\/case-preview\/inspection\/artifacts\/reports\/inspection.html/,
+  )
+  expect(state.fileRequests.some((path) => path.endsWith("25-visual-report.json"))).toBe(false)
+  expect(state.apiRequests.filter((value) => /\/session\/case-|\/file\//.test(value))).toEqual([])
   expect(state.errors).toEqual([])
 })
 

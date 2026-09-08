@@ -6,6 +6,7 @@ import {
   artifactExtension,
   artifactImageMimeType,
   artifactPreviewKind,
+  artifactReportFiles,
   artifactText,
   resolveArtifactPath,
 } from "./artifact-preview"
@@ -14,6 +15,7 @@ describe("artifact preview", () => {
   test("classifies supported document formats case-insensitively", () => {
     expect(artifactPreviewKind("reports/brief.DOCX")).toBe("docx")
     expect(artifactPreviewKind("reports/model.xlsx")).toBe("excel")
+    expect(artifactPreviewKind("reports/data.csv")).toBe("excel")
     expect(artifactPreviewKind("slides/deck.pptx")).toBe("pptx")
     expect(artifactPreviewKind("notes/readme.markdown")).toBe("markdown")
     expect(artifactPreviewKind("source/main.go")).toBe("text")
@@ -61,5 +63,17 @@ describe("artifact preview", () => {
 
   test("does not guess when duplicate filenames exist", () => {
     expect(resolveArtifactPath("brief.pdf", ["one/brief.pdf", "two/brief.pdf"])).toBeUndefined()
+  })
+
+  test("routes supported report files to text and visual tabs", () => {
+    const files = ["report.md", "appendix.DOCX", "paper.pdf", "dashboard.HTML", "data.csv", "figure.png"].map(
+      (path) => ({ path }),
+    )
+    expect(artifactReportFiles(files, "text").map((item) => item.path)).toEqual([
+      "report.md",
+      "appendix.DOCX",
+      "paper.pdf",
+    ])
+    expect(artifactReportFiles(files, "visual").map((item) => item.path)).toEqual(["dashboard.HTML"])
   })
 })

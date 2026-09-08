@@ -83,6 +83,29 @@ describe("prompt attachment session ownership", () => {
       dispose()
     })
   })
+
+  test("uses the stored conversation file and extracted text for Word documents", async () => {
+    await createRoot(async (dispose) => {
+      const prompt = createPromptState()
+      const attachments = createPromptAttachmentsCore({
+        capture: prompt.capture,
+        editor: () => document.createElement("div"),
+        storeFile: async () => ({ path: "/workspace/runs/one/attachments/report.docx", content: "报告正文" }),
+      })
+
+      expect(await attachments.addAttachment(new File([Uint8Array.of(0)], "report.docx"))).toBe(true)
+
+      expect(images(prompt)).toEqual([
+        expect.objectContaining({
+          filename: "report.docx",
+          mime: "text/plain",
+          sourcePath: "/workspace/runs/one/attachments/report.docx",
+          dataUrl: "data:text/plain;charset=utf-8,%E6%8A%A5%E5%91%8A%E6%AD%A3%E6%96%87",
+        }),
+      ])
+      dispose()
+    })
+  })
 })
 
 function images(prompt: ReturnType<typeof createPromptState>) {
