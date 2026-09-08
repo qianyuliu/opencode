@@ -36,6 +36,8 @@ type PromptAttachmentsCoreInput = {
   warn?: () => void
   readClipboardImage?: () => Promise<File | null>
   getPathForFile?: (file: File) => string
+  storeFile?: (file: File, mime: string) => Promise<{ path: string; content: string } | undefined>
+  onStoreError?: (error: unknown) => void
 }
 
 type PromptAttachmentsInput = {
@@ -47,6 +49,8 @@ type PromptAttachmentsInput = {
   addPart: (part: ContentPart) => boolean
   readClipboardImage?: () => Promise<File | null>
   getPathForFile?: (file: File) => string
+  storeFile?: (file: File, mime: string) => Promise<{ path: string; content: string } | undefined>
+  onStoreError?: (error: unknown) => void
 }
 
 export function createPromptAttachmentsCore(input: PromptAttachmentsCoreInput) {
@@ -65,15 +69,25 @@ export function createPromptAttachmentsCore(input: PromptAttachmentsCoreInput) {
       return false
     }
 
-    const url = await dataUrl(file, mime)
+    const stored = await input.storeFile?.(file, mime).catch((error) => {
+      input.onStoreError?.(error)
+      return null
+    })
+    if (stored === null) {
+      return false
+    }
+    const resolvedMime = stored ? "text/plain" : mime
+    const url = stored
+      ? `data:text/plain;charset=utf-8,${encodeURIComponent(stored.content)}`
+      : await dataUrl(file, resolvedMime)
     if (!url) return false
 
     const attachment: ImageAttachmentPart = {
       type: "image",
       id: uuid(),
       filename: file.name,
-      sourcePath: input.getPathForFile?.(file) || undefined,
-      mime,
+      sourcePath: stored?.path ?? (input.getPathForFile?.(file) || undefined),
+      mime: resolvedMime,
       dataUrl: url,
     }
     target.prompt.set([...target.prompt.current(), attachment], target.cursor)

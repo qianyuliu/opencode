@@ -50,6 +50,7 @@ import { createSessionTabs } from "@/pages/session/helpers"
 import { createTextFragment, getCursorPosition, setCursorPosition, setRangeEdge } from "./prompt-input/editor-dom"
 import { createPromptAttachments } from "./prompt-input/attachments"
 import { ACCEPTED_FILE_TYPES, pickAttachmentFiles } from "./prompt-input/files"
+import { docxText, fileBase64, isDocx, isWordDocument, safeUploadedFilename } from "./prompt-input/word-documents"
 import {
   canNavigateHistoryAtCursor,
   navigatePromptHistory,
@@ -91,6 +92,13 @@ import {
 } from "@/utils/cmcc-knowledge"
 import { useNavigate, useSearchParams } from "@solidjs/router"
 import { useTabs } from "@/context/tabs"
+import { uuid } from "@/utils/uuid"
+import {
+  CMCC_ARTIFACT_DIRECTORY_METADATA,
+  cmccArtifactDirectory,
+  cmccEnsureWorkspace,
+} from "@/utils/cmcc-workspace"
+import { cmccWorkspaceRelativePath } from "@/utils/cmcc-artifact-paths"
 
 export type PromptInputState = ReturnType<typeof usePrompt>
 
@@ -362,6 +370,16 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     return paths
   })
   const info = createMemo(() => (props.controls.session.id ? sync().session.get(props.controls.session.id) : undefined))
+  const conversationArtifactDirectory = createMemo(() => {
+    const session = info()
+    if (session) return cmccArtifactDirectory(session.metadata, sdk().directory)
+    const draft = sessionTabs.store.find((tab) => tab.type === "draft" && tab.draftID === search.draftId)
+    if (!draft || draft.type !== "draft") return
+    return cmccArtifactDirectory(
+      { [CMCC_ARTIFACT_DIRECTORY_METADATA]: draft.artifactDirectory },
+      sdk().directory,
+    )
+  })
   const working = createMemo(() => sync().data.session_working(props.controls.session.id ?? ""))
   const imageAttachments = createMemo(() =>
     prompt.current().filter((part): part is ImageAttachmentPart => part.type === "image"),
@@ -1377,6 +1395,53 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     addPart,
     readClipboardImage: platform.readClipboardImage,
     getPathForFile: platform.getPathForFile,
+    onStoreError: (error) => {
+      showToast({
+        title: "Word 文件上传失败",
+        description: error instanceof Error ? error.message : language.t("common.requestFailed"),
+        variant: "error",
+      })
+    },
+    storeFile: async (file, mime) => {
+      if (!isWordDocument(file, mime)) return
+      if (file.size > 25 * 1024 * 1024) throw new Error("Word 文件不能超过 25 MB")
+
+      const artifactDirectory = conversationArtifactDirectory()
+      if (!artifactDirectory) throw new Error("当前对话尚未分配产物目录")
+      const artifactRoot = cmccWorkspaceRelativePath(sdk().directory, artifactDirectory)
+      if (!artifactRoot) throw new Error("当前对话产物目录不属于运行工作区")
+
+      await cmccEnsureWorkspace(
+        artifactDirectory,
+        (directory) => sdk().client.file.createDirectory({ path: directory }, { throwOnError: true }),
+        sdk().scope,
+      )
+      const name = `${uuid()}-${safeUploadedFilename(file.name)}`
+      const path = `${artifactRoot}/attachments/${name}`
+      await sdk().client.file.upload(
+        { path, content: await fileBase64(file), encoding: "base64" },
+        { throwOnError: true },
+      )
+
+      const absolutePath = `${artifactDirectory}/attachments/${name}`
+      if (!isDocx(file, mime)) {
+        return {
+          path: absolutePath,
+          content: `用户上传的旧版 Word 文档已保存到 ${absolutePath}。该格式是二进制 .doc，请使用当前环境可用的 Office 转换工具读取，并优先转换为 DOCX、PDF 或纯文本后再分析。`,
+        }
+      }
+
+      const extracted = await docxText(file).catch(() => "")
+      const limit = 120_000
+      const content = extracted.slice(0, limit)
+      const suffix = extracted.length > limit ? `\n\n[正文过长，已截取前 ${limit} 个字符；完整文件位于上述路径。]` : ""
+      return {
+        path: absolutePath,
+        content: content
+          ? `用户上传的 DOCX 文档已保存到 ${absolutePath}。以下是从文档中提取的正文：\n\n${content}${suffix}`
+          : `用户上传的 DOCX 文档已保存到 ${absolutePath}，但未能直接提取正文。请使用当前环境可用的 Office 或 ZIP/XML 工具读取该文件。`,
+      }
+    },
   })
 
   const fileAttachmentInput = () => (

@@ -6,6 +6,7 @@ import { useFile } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { showToast } from "@/utils/toast"
 import type { SessionArtifact } from "../agent-workbench/model"
+import { ReportArtifactPreview } from "../report-artifact-preview"
 import { buildAiScienceArtifactTree, type AiScienceArtifactTreeNode } from "./data"
 import { useAiScienceWorkbench } from "./workbench-context"
 
@@ -186,24 +187,26 @@ function ArtifactTree(props: {
 }
 
 export function AiScienceTextReportTab() {
+  const context = useAiScienceWorkbench()
   return (
-    <div class="h-full min-h-0 bg-[#f7f8fb] px-4 py-4">
-      <ReportEmpty
-        title="文字报告尚未生成"
-        description="当前 AI for Science 会话没有唯一的文字报告产物，已生成内容可在文件页查看。"
-      />
-    </div>
+    <ReportArtifactPreview
+      artifacts={context.workbench().artifacts}
+      kind="text"
+      empty={
+        <ReportEmpty title="文字报告尚未生成" description="等待 MD、DOCX 或 PDF 格式的科研产物生成。" />
+      }
+    />
   )
 }
 
 export function AiScienceVisualReportTab() {
+  const context = useAiScienceWorkbench()
   return (
-    <div class="h-full min-h-0 bg-[#f7f8fb] px-4 py-4">
-      <ReportEmpty
-        title="可视化报告尚未生成"
-        description="当前 AI for Science 会话没有统一的可视化报告格式，图片和数据文件可在文件页查看。"
-      />
-    </div>
+    <ReportArtifactPreview
+      artifacts={context.workbench().artifacts}
+      kind="visual"
+      empty={<ReportEmpty title="可视化报告尚未生成" description="等待 HTML 格式的科研产物生成。" />}
+    />
   )
 }
 

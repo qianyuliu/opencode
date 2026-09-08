@@ -25,6 +25,7 @@ import { useServerSync } from "@/context/server-sync"
 import { useSync } from "@/context/sync"
 import { createFileTabListSync } from "@/pages/session/file-tab-scroll"
 import { FileTabContent } from "@/pages/session/file-tabs"
+import { ReportArtifactPreview } from "@/pages/session/report-artifact-preview"
 import {
   createOpenSessionFileTab,
   createSessionTabs,
@@ -36,7 +37,7 @@ import { setSessionHandoff } from "@/pages/session/handoff"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { DeepInsightMark } from "@/components/brand"
 import { showToast } from "@/utils/toast"
-import { artifactPreviewKind, artifactText, resolveArtifactPath } from "@/pages/session/artifact-preview"
+import { artifactPreviewKind, artifactReportFiles, artifactText, resolveArtifactPath } from "@/pages/session/artifact-preview"
 import { cmccArtifactDirectory } from "@/utils/cmcc-workspace"
 import {
   cmccScanWorkspaceArtifactPaths,
@@ -45,7 +46,7 @@ import {
 } from "@/utils/cmcc-artifact-paths"
 
 type RenderDiff = (SnapshotFileDiff & { file: string }) | VcsFileDiff
-type CmccPanelTab = "plan" | "artifacts" | "browser" | "review"
+type CmccPanelTab = "plan" | "artifacts" | "text" | "visual" | "browser" | "review"
 type CmccArtifact = {
   id: string
   path: string
@@ -932,16 +933,25 @@ function CmccAssistantPanel(props: {
   reviewPanel: () => JSX.Element
   showReview: boolean
 }) {
+  const reports = createMemo(() =>
+    props.artifacts
+      .filter((artifact) => artifact.status !== "deleted")
+      .map((artifact) => ({ path: artifact.path, filename: fileName(artifact.path) })),
+  )
+  const textReportCount = createMemo(() => artifactReportFiles(reports(), "text").length)
+  const visualReportCount = createMemo(() => artifactReportFiles(reports(), "visual").length)
   const tabs = createMemo(() => [
     { id: "plan" as const, label: "计划", count: props.todos.length },
     { id: "artifacts" as const, label: "产出", count: props.artifacts.length },
+    ...(textReportCount() ? [{ id: "text" as const, label: "文字报告", count: textReportCount() }] : []),
+    ...(visualReportCount() ? [{ id: "visual" as const, label: "可视化报告", count: visualReportCount() }] : []),
     { id: "browser" as const, label: "浏览器" },
     { id: "review" as const, label: "审查", count: props.reviewCount },
   ])
 
   return (
     <div class="flex size-full min-w-0 flex-col bg-v2-background-bg-base">
-      <div class="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-1 border-b border-v2-border-border-base bg-v2-background-bg-base px-3">
+      <div class="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-1 overflow-x-auto border-b border-v2-border-border-base bg-v2-background-bg-base px-3">
         <For each={tabs()}>
           {(tab) => (
             <button
@@ -977,6 +987,20 @@ function CmccAssistantPanel(props: {
               activeArtifact={props.activeArtifact}
               clearActiveArtifact={props.clearActiveArtifact}
               openArtifact={props.openArtifact}
+            />
+          </Match>
+          <Match when={props.active === "text"}>
+            <ReportArtifactPreview
+              artifacts={reports()}
+              kind="text"
+              empty={<CmccEmptyPanel title="暂无文字报告" description="MD、DOCX 和 PDF 产物会自动汇总到这里。" />}
+            />
+          </Match>
+          <Match when={props.active === "visual"}>
+            <ReportArtifactPreview
+              artifacts={reports()}
+              kind="visual"
+              empty={<CmccEmptyPanel title="暂无可视化报告" description="HTML 产物会自动汇总到这里。" />}
             />
           </Match>
           <Match when={props.active === "browser"}>

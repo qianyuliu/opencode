@@ -22,6 +22,13 @@ describe("attachmentMime", () => {
     const file = new File([Uint8Array.of(0, 255, 1, 2)], "blob.bin", { type: "application/octet-stream" })
     expect(await attachmentMime(file)).toBeUndefined()
   })
+
+  test("accepts DOC and DOCX files even when the browser omits their mime", async () => {
+    expect(await attachmentMime(new File([Uint8Array.of(0)], "legacy.doc"))).toBe("application/msword")
+    expect(await attachmentMime(new File([Uint8Array.of(0)], "report.docx"))).toBe(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+  })
 })
 
 describe("pickAttachmentFiles", () => {

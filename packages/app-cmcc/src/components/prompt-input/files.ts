@@ -42,6 +42,10 @@ const IMAGE_EXTS = new Map([
   ["png", "image/png"],
   ["webp", "image/webp"],
 ])
+const WORD_MIMES = new Map([
+  ["doc", "application/msword"],
+  ["docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+])
 const TEXT_MIMES = new Set([
   "application/json",
   "application/ld+json",
@@ -88,7 +92,8 @@ export async function attachmentMime(file: File) {
   if (type === "application/pdf") return type
 
   const suffix = ext(file.name)
-  const fallback = IMAGE_EXTS.get(suffix) ?? (suffix === "pdf" ? "application/pdf" : undefined)
+  const fallback = IMAGE_EXTS.get(suffix) ?? (suffix === "pdf" ? "application/pdf" : WORD_MIMES.get(suffix))
+  if (fallback && WORD_MIMES.has(suffix)) return fallback
   if ((!type || type === "application/octet-stream") && fallback) return fallback
 
   if (textMime(type)) return "text/plain"

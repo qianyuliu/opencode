@@ -8,6 +8,7 @@ import { useSDK } from "@/context/sdk"
 import { artifactText } from "@/pages/session/artifact-preview"
 import { showToast } from "@/utils/toast"
 import type { SessionArtifact } from "../agent-workbench/model"
+import { ReportArtifactPreview } from "../report-artifact-preview"
 import { DEEPINSPECT_LEAD_AGENT } from "./config"
 import { DeepInspectVisualReportView } from "./visual-report-view"
 import { parseDeepInspectVisualReport } from "./visual-report"
@@ -159,50 +160,29 @@ export function DeepInspectFilesTab() {
 
 export function DeepInspectTextReportTab() {
   const context = useDeepInspectWorkbench()
-  const file = useFile()
-  const path = createMemo(() => context.workbench().textReportPath)
-  const state = createMemo(() => (path() ? file.get(path()!) : undefined))
-
-  createEffect(() => {
-    const value = path()
-    if (value) void file.load(value)
-  })
-
   return (
-    <div class="deeptrading-scrollbar h-full min-h-0 overflow-y-auto bg-[#f7f8fb] px-4 py-4">
-      <Show
-        when={path()}
-        fallback={<ReportEmpty title="文字报告尚未生成" description="等待 20-report.md 写入完成。" />}
-      >
-        <Switch>
-          <Match when={context.replay.isReplaying() || (state()?.loaded && state()?.content)}>
-            <div class="mx-auto w-full max-w-[860px] rounded-[8px] border border-[#e0e4eb] bg-white px-5 py-5 sm:px-7">
-              <Markdown
-                text={
-                  context.replay.isReplaying()
-                    ? context.replay.textReportMarkdown()
-                    : state()?.content
-                      ? artifactText(state()!.content!.content, state()!.content!.encoding)
-                      : ""
-                }
-                cacheKey={`${context.workbench().rootSessionId}:deepinspect-report${context.replay.isReplaying() ? ":replay" : ""}`}
-                streaming={context.replay.isReplaying()}
-                class="select-text text-[13px] leading-7 text-[#313847]"
-              />
-            </div>
-          </Match>
-          <Match when={state()?.error}>
-            {(error) => <ReportEmpty title="文字报告读取失败" description={error()} />}
-          </Match>
-          <Match when={state()?.loaded}>
-            <ReportEmpty title="文字报告内容为空" description="20-report.md 没有可展示内容。" />
-          </Match>
-          <Match when={true}>
-            <ReportEmpty title="正在读取文字报告" description="请稍候。" />
-          </Match>
-        </Switch>
-      </Show>
-    </div>
+    <Show
+      when={context.replay.isReplaying()}
+      fallback={
+        <ReportArtifactPreview
+          artifacts={context.workbench().artifacts}
+          kind="text"
+          preferredPath={context.workbench().textReportPath}
+          empty={<ReportEmpty title="文字报告尚未生成" description="等待 MD、DOCX 或 PDF 格式的产物生成。" />}
+        />
+      }
+    >
+      <div class="deeptrading-scrollbar h-full min-h-0 overflow-y-auto bg-[#f7f8fb] px-4 py-4">
+        <div class="mx-auto w-full max-w-[860px] rounded-[8px] border border-[#e0e4eb] bg-white px-5 py-5 sm:px-7">
+          <Markdown
+            text={context.replay.textReportMarkdown()}
+            cacheKey={`${context.workbench().rootSessionId}:deepinspect-report:replay`}
+            streaming
+            class="select-text text-[13px] leading-7 text-[#313847]"
+          />
+        </div>
+      </div>
+    </Show>
   )
 }
 
@@ -232,7 +212,7 @@ export function DeepInspectVisualReportTab() {
     return content ? artifactText(content.content, content.encoding) : ""
   })
 
-  return (
+  const structuredPreview = (
     <div class="deeptrading-scrollbar h-full min-h-0 overflow-y-auto bg-[#f7f8fb] px-4 py-4">
       <Show
         when={path()}
@@ -260,6 +240,13 @@ export function DeepInspectVisualReportTab() {
         </Switch>
       </Show>
     </div>
+  )
+  return (
+    <ReportArtifactPreview
+      artifacts={context.workbench().artifacts}
+      kind="visual"
+      empty={structuredPreview}
+    />
   )
 }
 

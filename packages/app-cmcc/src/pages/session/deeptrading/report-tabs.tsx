@@ -2,17 +2,14 @@ import { Markdown } from "@opencode-ai/session-ui/markdown"
 import { Icon } from "@opencode-ai/ui/icon"
 import { For, Match, Show, Switch, createEffect, createMemo, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
-import echartsRuntimeUrl from "../../../../node_modules/echarts/dist/echarts.min.js?url"
 import { ArtifactPreview } from "@/components/artifact-preview"
 import { useFile } from "@/context/file"
 import { useSDK } from "@/context/sdk"
-import { useServerSDK } from "@/context/server-sdk"
 import { artifactText } from "@/pages/session/artifact-preview"
-import { authTokenFromCredentials } from "@/utils/server"
 import { showToast } from "@/utils/toast"
 import type { SessionArtifact } from "../agent-workbench/model"
+import { ReportArtifactPreview } from "../report-artifact-preview"
 import { DEEPTRADING_LEAD_AGENT, deepTradingAvatar } from "./config"
-import { deepTradingHtmlReportPreviewUrl } from "./html-report"
 import { useDeepTradingWorkbench, type DeepTradingArtifactSource } from "./workbench-context"
 
 export function DeepTradingFilesTab() {
@@ -180,37 +177,29 @@ export function DeepTradingTextReportTab() {
 
 function LiveDeepTradingTextReportTab() {
   const context = useDeepTradingWorkbench()
-  const file = useFile()
-  const path = createMemo(() => context.workbench().textReportPath)
-  const state = createMemo(() => (path() ? file.get(path()!) : undefined))
-
-  createEffect(() => {
-    const value = path()
-    if (value) void file.load(value)
-  })
-
   return (
-    <ReportFileShell
-      path={path()}
-      state={state()}
-      emptyTitle="文字报告尚未生成"
-      emptyDescription="等待 30-final-report.md 写入完成。"
+    <Show
+      when={context.replay.isReplaying()}
+      fallback={
+        <ReportArtifactPreview
+          artifacts={context.workbench().artifacts}
+          kind="text"
+          preferredPath={context.workbench().textReportPath}
+          empty={<ReportEmpty title="文字报告尚未生成" description="等待 MD、DOCX 或 PDF 格式的产物生成。" />}
+        />
+      }
     >
-      {(content) => (
+      <div class="deeptrading-scrollbar h-full min-h-0 overflow-y-auto bg-[#f7f8fb] px-4 py-4">
         <div class="mx-auto w-full max-w-[860px] rounded-[8px] border border-[#e0e4eb] bg-white px-5 py-5 sm:px-7">
           <Markdown
-            text={
-              context.replay.isReplaying()
-                ? context.replay.textReportMarkdown()
-                : artifactText(content.content, content.encoding)
-            }
-            cacheKey={`${context.workbench().rootSessionId}:30-final-report${context.replay.isReplaying() ? ":replay" : ""}`}
-            streaming={context.replay.isReplaying()}
+            text={context.replay.textReportMarkdown()}
+            cacheKey={`${context.workbench().rootSessionId}:30-final-report:replay`}
+            streaming
             class="select-text text-[13px] leading-7 text-[#313847]"
           />
         </div>
-      )}
-    </ReportFileShell>
+      </div>
+    </Show>
   )
 }
 
@@ -225,44 +214,13 @@ export function DeepTradingVisualReportTab() {
 
 function LiveDeepTradingVisualReportTab() {
   const context = useDeepTradingWorkbench()
-  const sdk = useSDK()
-  const serverSDK = useServerSDK()
-  const path = createMemo(() => context.workbench().visualReportPath)
-  const previewUrl = createMemo(() => {
-    const value = path()
-    if (!value) return
-    const sdkContext = sdk()
-    const connection = serverSDK().server.http
-    return deepTradingHtmlReportPreviewUrl({
-      serverUrl: sdkContext.url,
-      directory: sdkContext.directory,
-      path: value,
-      runtimeUrl: echartsRuntimeUrl,
-      pageOrigin: window.location.origin,
-      authToken: connection.password
-        ? authTokenFromCredentials({ username: connection.username, password: connection.password })
-        : undefined,
-    })
-  })
-
   return (
-    <div class="h-full min-h-0 overflow-hidden bg-[#f7f8fb]">
-      <Show
-        when={previewUrl()}
-        fallback={<ReportEmpty title="可视化报告尚未生成" description="等待 40-report.html 写入完成。" />}
-        keyed
-      >
-        {(url) => (
-          <iframe
-            title="DeepTrading 可视化报告"
-            class="block size-full min-h-[400px] border-0 bg-white"
-            src={url}
-            sandbox="allow-scripts"
-            referrerpolicy="origin"
-          />
-        )}
-      </Show>
-    </div>
+    <ReportArtifactPreview
+      artifacts={context.workbench().artifacts}
+      kind="visual"
+      preferredPath={context.workbench().visualReportPath}
+      empty={<ReportEmpty title="可视化报告尚未生成" description="等待 HTML 格式的产物生成。" />}
+    />
   )
 }
 

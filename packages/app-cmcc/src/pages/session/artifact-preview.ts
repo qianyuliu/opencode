@@ -9,6 +9,8 @@ export type ArtifactPreviewKind =
   | "text"
   | "unsupported"
 
+export type ArtifactReportKind = "text" | "visual"
+
 const IMAGE_EXTENSIONS = new Set(["avif", "bmp", "gif", "jpeg", "jpg", "png", "svg", "webp"])
 const IMAGE_MIME_TYPES: Record<string, string> = {
   avif: "image/avif",
@@ -51,13 +53,18 @@ export function artifactPreviewKind(path: string): ArtifactPreviewKind {
   const extension = artifactExtension(path)
   if (extension === "html" || extension === "htm") return "html"
   if (extension === "docx") return "docx"
-  if (extension === "xls" || extension === "xlsx") return "excel"
+  if (extension === "csv" || extension === "xls" || extension === "xlsx") return "excel"
   if (extension === "pptx") return "pptx"
   if (extension === "pdf") return "pdf"
   if (IMAGE_EXTENSIONS.has(extension)) return "image"
   if (extension === "md" || extension === "markdown" || extension === "mdx") return "markdown"
   if (TEXT_EXTENSIONS.has(extension)) return "text"
   return "unsupported"
+}
+
+export function artifactReportFiles<T extends { path: string }>(items: readonly T[], kind: ArtifactReportKind) {
+  const previewKinds = kind === "text" ? new Set<ArtifactPreviewKind>(["markdown", "docx", "pdf"]) : new Set<ArtifactPreviewKind>(["html"])
+  return items.filter((item) => previewKinds.has(artifactPreviewKind(item.path)))
 }
 
 export function artifactImageMimeType(path: string, mimeType?: string) {
