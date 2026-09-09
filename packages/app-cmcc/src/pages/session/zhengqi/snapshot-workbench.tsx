@@ -3,6 +3,7 @@ import { createStore } from "solid-js/store"
 import type { DockApiCaseSnapshot } from "@/context/dockapi"
 import type { AgentArtifactSource } from "../agent-workbench/artifact-source"
 import { createCaseSnapshotReplay } from "../agent-workbench/snapshot-replay"
+import { createReportLength } from "../agent-workbench/report-length-context"
 import { buildCaseSnapshotWorkbench, caseSnapshotNestedSessions } from "../agent-workbench/snapshot"
 import { collectSearchUrlEvents } from "../agent-workbench/statistics"
 import { ZHENGQI_ARTIFACT_ROLES, ZHENGQI_MEMBERS, ZHENGQI_PUBLIC_RESEARCH_AGENT } from "./config"
@@ -55,8 +56,17 @@ export function ZhengqiSnapshotWorkbenchProvider(
     searchUrlEvents,
   })
 
+  const reportLength = createReportLength({
+    scope: () => JSON.stringify([props.snapshot().caseCode, props.snapshot().capturedAt]),
+    report: () => actualWorkbench().artifacts.find((artifact) => artifact.path === actualWorkbench().textReportPath),
+    source: props.artifactSource,
+    replaying: controller.replay.isReplaying,
+    replayMarkdown: controller.replay.textReportMarkdown,
+  })
+
   const value: ZhengqiWorkbenchContextValue = {
     workbench: controller.workbench,
+    reportLength,
     selectedAgentId: () => state.selectedAgentId,
     selectAgent(agentId) {
       if (agentId !== "overview" && !MEMBER_IDS.has(agentId)) return

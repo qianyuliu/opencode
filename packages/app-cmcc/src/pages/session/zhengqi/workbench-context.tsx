@@ -10,6 +10,8 @@ import {
 } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 import { createWorkbenchRuntime } from "../agent-workbench/runtime"
+import { createArtifactFileCatalog } from "../agent-workbench/artifact-file-catalog"
+import { createReportLength } from "../agent-workbench/report-length-context"
 import { useFile } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
@@ -52,6 +54,7 @@ export type ZhengqiWorkbenchContextValue = {
   selectedAgentId: Accessor<string>
   selectAgent: (agentId: string) => void
   retrySession: (sessionId: string) => Promise<void>
+  reportLength: Accessor<number | undefined>
   artifactSource?: AgentArtifactSource
   replay: {
     canReplay: Accessor<boolean>
@@ -381,10 +384,41 @@ export function ZhengqiWorkbenchProvider(
     const artifactRoot = artifactDirectory ? cmccWorkspaceRelativePath(sdk().directory, artifactDirectory) : undefined
     return scopeZhengqiArtifacts(found, artifactRoot)
   })
+  const fileCatalog = createArtifactFileCatalog({
+    root: rootSession,
+    status: () => rootTranscript()?.status,
+    artifacts: () => discovery().artifacts,
+    list: (path) => sdk().client.file.list({ path }).then((response) => {
+      if (!response.data) throw new Error("File list response is unavailable")
+      return response.data
+    }),
+  })
   const reports = createMemo(() => ({
     text: artifactByRole(discovery(), "text-report"),
     visual: artifactByRole(discovery(), "visual-report"),
   }))
+  const reportRevision = createMemo<number | undefined>((previous) => running() ? previous : rootSession()?.time.updated)
+  const reportLength = createReportLength({
+    scope: () => rootSession()?.id,
+    report: () => reports().text,
+    revision: reportRevision,
+    source: {
+      load: (path, force) => file.load(path, { force }),
+      get: (path) => {
+        const current = file.get(path)
+        return {
+          loaded: !!current?.loaded,
+          loading: current?.loading,
+          error: current?.error,
+          text: current?.content?.type === "text"
+            ? artifactText(current.content.content, current.content.encoding)
+            : undefined,
+        }
+      },
+    },
+    replaying: () => replayState.playing,
+    replayMarkdown: () => replayState.frame?.textReportMarkdown ?? "",
+  })
   const stats = createMemo(() => {
     const root = rootTranscript()
     if (!root) return { tokenCount: undefined, uniqueSearchUrlCount: 0 }
@@ -430,15 +464,17 @@ export function ZhengqiWorkbenchProvider(
         expertCount: ZHENGQI_MEMBERS.length,
       },
       artifacts: artifacts.artifacts,
+      fileArtifacts: fileCatalog.files(),
       textReportPath: reportFiles.text?.path,
       visualReportPath: reportFiles.visual?.path,
-      ambiguities: [...nodes.ambiguities, ...artifacts.ambiguities, ...(runtime.warning() ? [runtime.warning()!] : [])],
+      ambiguities: [...nodes.ambiguities, ...artifacts.ambiguities, ...fileCatalog.warnings(), ...(runtime.warning() ? [runtime.warning()!] : [])],
       loading: state.loading,
       error: state.error,
     }
   })
 
   const canReplay = createMemo(() => {
+    if (fileCatalog.loading()) return false
     const source = actualWorkbench()
     if (runtime.syncing() || runtime.warning() || source.agents.some((agent) => agent.status === "running")) return false
     if (!props.active() || state.loading || source.loading || source.error || running()) return false
@@ -550,6 +586,7 @@ export function ZhengqiWorkbenchProvider(
 
   const value: ZhengqiWorkbenchContextValue = {
     workbench,
+    reportLength,
     selectedAgentId: () => state.selectedAgentId,
     selectAgent(agentId) {
       if (agentId !== "overview" && !MEMBER_IDS.has(agentId)) return

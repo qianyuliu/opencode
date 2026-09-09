@@ -1,4 +1,5 @@
 import { Icon } from "@opencode-ai/ui/icon"
+import { formatCaseCharacterCount } from "@/utils/cmcc-cases"
 import { For, Match, Show, Switch, createMemo, createSignal, onCleanup, onMount } from "solid-js"
 import type { AgentNodeStatus } from "../agent-workbench/model"
 import { AgentAvatar, StatusBadge } from "../deeptrading/deeptrading-session-view"
@@ -13,7 +14,7 @@ export function DeepInspectTeamTab() {
   const dagNodes = new Map<string, HTMLButtonElement>()
   const stats = createMemo(() => {
     const tokenCount = context.workbench().stats.tokenCount
-    const issueCount = context.issueCount()
+    const reportLength = context.reportLength()
     return [
       {
         key: "elapsed",
@@ -28,10 +29,10 @@ export function DeepInspectTeamTab() {
         icon: "code-lines" as const,
       },
       {
-        key: "issues",
-        label: "问题线索",
-        value: issueCount === undefined ? "--" : `${formatNumber(issueCount)} 个问题`,
-        icon: "magnifying-glass" as const,
+        key: "report-length",
+        label: "报告篇幅",
+        value: context.workbench().loading || reportLength === undefined ? "--" : formatCaseCharacterCount(reportLength),
+        icon: "file-tree" as const,
       },
       {
         key: "experts",

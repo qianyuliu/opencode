@@ -9,6 +9,7 @@ import { artifactText } from "@/pages/session/artifact-preview"
 import { showToast } from "@/utils/toast"
 import type { AgentArtifactSource } from "../agent-workbench/artifact-source"
 import type { SessionArtifact } from "../agent-workbench/model"
+import { workbenchFiles } from "../agent-workbench/artifact-files"
 import { SnapshotFilesTab } from "../agent-workbench/snapshot-report-tabs"
 import { ReportArtifactPreview } from "../report-artifact-preview"
 import { DEEPINSPECT_LEAD_AGENT } from "./config"
@@ -18,6 +19,7 @@ import { useDeepInspectWorkbench } from "./workbench-context"
 
 export function DeepInspectFilesTab() {
   const context = useDeepInspectWorkbench()
+  const files = createMemo(() => workbenchFiles(context.workbench()))
   const ownerLabel = (agentId: string) => {
     if (agentId === DEEPINSPECT_LEAD_AGENT) return "总览"
     const agent = context.workbench().agents.find((item) => item.id === agentId)
@@ -26,7 +28,7 @@ export function DeepInspectFilesTab() {
   if (context.artifactSource) {
     return (
       <SnapshotFilesTab
-        artifacts={() => context.workbench().artifacts}
+        artifacts={files}
         source={context.artifactSource}
         emptyDescription="该案例快照没有保存巡查产物文件。"
         ownerLabel={(artifact) => ownerLabel(artifact.ownerAgentId)}
@@ -40,7 +42,7 @@ export function DeepInspectFilesTab() {
     downloading: undefined as string | undefined,
   })
   const selected = createMemo(() =>
-    context.workbench().artifacts.find((artifact) => artifact.path === state.selectedPath),
+    files().find((artifact) => artifact.path === state.selectedPath),
   )
   const content = createMemo(() => {
     const artifact = selected()
@@ -72,14 +74,14 @@ export function DeepInspectFilesTab() {
   return (
     <div class="h-full min-h-0 overflow-hidden px-4 py-4">
       <Show
-        when={context.workbench().artifacts.length > 0}
+        when={files().length > 0}
         fallback={<ReportEmpty title="暂无文件产出" description="当前巡查会话确认写入的文件会在这里逐步出现。" />}
       >
         <Show
           when={selected()}
           fallback={
             <div class="deeptrading-scrollbar h-full min-h-0 space-y-2 overflow-y-auto">
-              <For each={context.workbench().artifacts}>
+              <For each={files()}>
                 {(artifact) => (
                   <article class="flex min-w-0 items-center gap-3 rounded-[8px] border border-[#e0e4eb] bg-white p-3">
                     <span class="flex size-9 shrink-0 items-center justify-center rounded-[7px] bg-[#eef2fa] text-[#5970aa]">

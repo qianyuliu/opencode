@@ -10,6 +10,7 @@ import {
 } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 import { createWorkbenchRuntime } from "../agent-workbench/runtime"
+import { createArtifactFileCatalog } from "../agent-workbench/artifact-file-catalog"
 import { useFile } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
@@ -385,6 +386,15 @@ export function ShoppersWorkbenchProvider(
     const warning = shoppersArtifactDirectoryWarning({ artifacts: found.artifacts, artifactRoot })
     return { ...found, ambiguities: [...found.ambiguities, ...(warning ? [warning] : [])] }
   })
+  const fileCatalog = createArtifactFileCatalog({
+    root: rootSession,
+    status: () => rootTranscript()?.status,
+    artifacts: () => discovery().artifacts,
+    list: (path) => sdk().client.file.list({ path }).then((response) => {
+      if (!response.data) throw new Error("File list response is unavailable")
+      return response.data
+    }),
+  })
   const reports = createMemo(() => ({
     text: artifactByRole(discovery(), "text-report"),
     visual: artifactByRole(discovery(), "visual-report"),
@@ -457,15 +467,17 @@ export function ShoppersWorkbenchProvider(
         expertCount: SHOPPERS_MEMBERS.length,
       },
       artifacts: artifacts.artifacts,
+      fileArtifacts: fileCatalog.files(),
       textReportPath: reportFiles.text?.path,
       visualReportPath: reportFiles.visual?.path,
-      ambiguities: [...nodes.ambiguities, ...artifacts.ambiguities, ...(runtime.warning() ? [runtime.warning()!] : [])],
+      ambiguities: [...nodes.ambiguities, ...artifacts.ambiguities, ...fileCatalog.warnings(), ...(runtime.warning() ? [runtime.warning()!] : [])],
       loading: state.loading,
       error: state.error,
     }
   })
 
   const canReplay = createMemo(() => {
+    if (fileCatalog.loading()) return false
     const source = actualWorkbench()
     if (runtime.syncing() || runtime.warning() || source.agents.some((agent) => agent.status === "running")) return false
     if (!props.active() || state.loading || source.loading || source.error || running()) return false

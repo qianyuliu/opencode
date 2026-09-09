@@ -1,4 +1,5 @@
 import { Icon } from "@opencode-ai/ui/icon"
+import { formatCaseCharacterCount } from "@/utils/cmcc-cases"
 import { For, Match, Show, Switch, createMemo } from "solid-js"
 import { SerialAgentDag } from "../agent-workbench/serial-agent-dag"
 import { StatusBadge } from "../deeptrading/deeptrading-session-view"
@@ -15,6 +16,7 @@ export function ZhengqiTeamTab() {
   )
   const stats = createMemo(() => {
     const tokenCount = context.workbench().stats.tokenCount
+    const reportLength = context.reportLength()
     return [
       {
         key: "elapsed",
@@ -29,12 +31,10 @@ export function ZhengqiTeamTab() {
         icon: "code-lines" as const,
       },
       {
-        key: "sources",
-        label: "公开来源",
-        value: context.workbench().loading
-          ? "--"
-          : `${formatNumber(context.workbench().stats.uniqueSearchUrlCount)} 个来源`,
-        icon: "magnifying-glass" as const,
+        key: "report-length",
+        label: "报告篇幅",
+        value: context.workbench().loading || reportLength === undefined ? "--" : formatCaseCharacterCount(reportLength),
+        icon: "file-tree" as const,
       },
       {
         key: "experts",

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { AgentWorkbench } from "../agent-workbench/model"
 import type { SearchUrlEvent } from "../agent-workbench/statistics"
+import { workbenchFiles } from "../agent-workbench/artifact-files"
 import {
   advanceDeepTradingReplay,
   compileDeepTradingReplay,
@@ -79,6 +80,29 @@ const searchEvents: SearchUrlEvent[] = [
 ]
 
 describe("DeepTrading replay timeline", () => {
+  test("replays supplementary files without adding them to report candidates", () => {
+    const source = workbench()
+    const extra = {
+      ...source.artifacts[0]!,
+      path: "runs/job/35-report.pdf",
+      filename: "35-report.pdf",
+      ownerAgentId: "",
+      messageId: "",
+      partId: "",
+    }
+    source.fileArtifacts = [...source.artifacts, extra]
+    const timeline = compileDeepTradingReplay({ workbench: source, searchUrlEvents: [], textReportMarkdown: "report" })
+    const start = createDeepTradingReplayFrame(timeline)
+    expect(workbenchFiles(start.workbench)).toEqual([])
+    const released = advanceDeepTradingReplay({ timeline, frame: start, nextCueIndex: 0, progress: 0.74 }).frame
+    expect(workbenchFiles(released.workbench)).toEqual(source.fileArtifacts)
+    expect(released.workbench.artifacts).toEqual(source.artifacts)
+    const end = advanceDeepTradingReplay({ timeline, frame: start, nextCueIndex: 0, progress: 1 }).frame
+    expect(workbenchFiles(end.workbench)).toEqual(source.fileArtifacts)
+    expect(end.workbench.textReportPath).toBe(source.textReportPath)
+    expect(end.workbench.visualReportPath).toBe(source.visualReportPath)
+  })
+
   test("splits headings without blank lines and keeps fenced code intact", () => {
     expect(splitReplayMarkdown("## 一\n正文\n## 二\n```ts\nconst a = 1\n\nconst b = 2\n```\n结尾")).toEqual([
       "## 一\n正文",

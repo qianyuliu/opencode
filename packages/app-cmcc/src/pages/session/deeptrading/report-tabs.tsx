@@ -8,6 +8,7 @@ import { useSDK } from "@/context/sdk"
 import { artifactText } from "@/pages/session/artifact-preview"
 import { showToast } from "@/utils/toast"
 import type { SessionArtifact } from "../agent-workbench/model"
+import { workbenchFiles } from "../agent-workbench/artifact-files"
 import { ReportArtifactPreview } from "../report-artifact-preview"
 import { DEEPTRADING_LEAD_AGENT, deepTradingAvatar } from "./config"
 import { useDeepTradingWorkbench, type DeepTradingArtifactSource } from "./workbench-context"
@@ -23,6 +24,7 @@ export function DeepTradingFilesTab() {
 
 function LiveDeepTradingFilesTab() {
   const context = useDeepTradingWorkbench()
+  const files = createMemo(() => workbenchFiles(context.workbench()))
   const file = useFile()
   const sdk = useSDK()
   const ownerLabel = (agentId: string) => {
@@ -35,7 +37,7 @@ function LiveDeepTradingFilesTab() {
     downloading: undefined as string | undefined,
   })
   const selected = createMemo(() =>
-    context.workbench().artifacts.find((artifact) => artifact.path === state.selectedPath),
+    files().find((artifact) => artifact.path === state.selectedPath),
   )
   const content = createMemo(() => {
     const artifact = selected()
@@ -69,14 +71,14 @@ function LiveDeepTradingFilesTab() {
   return (
     <div class="h-full min-h-0 overflow-hidden px-4 py-4">
       <Show
-        when={context.workbench().artifacts.length > 0}
+        when={files().length > 0}
         fallback={<ReportEmpty title="暂无文件产出" description="当前会话确认写入的文件会在这里逐步出现。" />}
       >
         <Show
           when={selected()}
           fallback={
             <div class="deeptrading-scrollbar h-full min-h-0 space-y-2 overflow-y-auto">
-              <For each={context.workbench().artifacts}>
+              <For each={files()}>
                 {(artifact) => (
                   <article class="flex min-w-0 items-center gap-3 rounded-[8px] border border-[#e0e4eb] bg-white p-3">
                     <span class="flex size-9 shrink-0 items-center justify-center rounded-[7px] bg-[#eef2fa] text-[#5970aa]">

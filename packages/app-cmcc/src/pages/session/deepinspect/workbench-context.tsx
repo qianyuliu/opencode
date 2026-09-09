@@ -10,6 +10,8 @@ import {
 } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 import { createWorkbenchRuntime } from "../agent-workbench/runtime"
+import { createArtifactFileCatalog } from "../agent-workbench/artifact-file-catalog"
+import { createReportLength } from "../agent-workbench/report-length-context"
 import { useFile } from "@/context/file"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
@@ -49,7 +51,6 @@ import {
   buildDeepInspectExecutions,
   deepInspectArtifactDirectoryWarning,
   deepInspectProgress,
-  parseDeepInspectIssueCount,
   type DeepInspectExecutionView,
 } from "./data"
 
@@ -63,7 +64,7 @@ export type DeepInspectWorkbenchContextValue = {
   retrySession: (sessionId: string) => Promise<void>
   executions: Accessor<DeepInspectExecutionView[]>
   progressPercent: Accessor<number>
-  issueCount: Accessor<number | undefined>
+  reportLength: Accessor<number | undefined>
   artifactSource?: AgentArtifactSource
   replay: {
     canReplay: Accessor<boolean>
@@ -301,30 +302,40 @@ export function DeepInspectWorkbenchProvider(
       allowSameAgentPathRewrites: true,
     })
   })
+  const fileCatalog = createArtifactFileCatalog({
+    root: rootSession,
+    status: () => rootTranscript()?.status,
+    artifacts: () => discovery().artifacts,
+    list: (path) => sdk().client.file.list({ path }).then((response) => {
+      if (!response.data) throw new Error("File list response is unavailable")
+      return response.data
+    }),
+  })
   const reports = createMemo(() => ({
     text: artifactByRole(discovery(), "text-report"),
     visual: artifactByRole(discovery(), "visual-report"),
   }))
-  const issueArtifact = createMemo(() => {
-    const runDirectory = discovery().runDirectory
-    if (!runDirectory) return
-    return discovery().artifacts.find(
-      (artifact) =>
-        artifact.filename === "06-consolidated-issues.json" &&
-        artifact.path.split("/").slice(0, -1).join("/") === runDirectory,
-    )
-  })
-
-  createEffect(() => {
-    const artifact = issueArtifact()
-    if (artifact) void file.load(artifact.path)
-  })
-
-  const actualIssueCount = createMemo(() => {
-    const artifact = issueArtifact()
-    if (!artifact) return
-    const content = file.get(artifact.path)?.content
-    return content ? parseDeepInspectIssueCount(artifactText(content.content, content.encoding)) : undefined
+  const reportRevision = createMemo<number | undefined>((previous) => running() ? previous : rootSession()?.time.updated)
+  const reportLength = createReportLength({
+    scope: () => rootSession()?.id,
+    report: () => reports().text,
+    revision: reportRevision,
+    source: {
+      load: (path, force) => file.load(path, { force }),
+      get: (path) => {
+        const current = file.get(path)
+        return {
+          loaded: !!current?.loaded,
+          loading: current?.loading,
+          error: current?.error,
+          text: current?.content?.type === "text"
+            ? artifactText(current.content.content, current.content.encoding)
+            : undefined,
+        }
+      },
+    },
+    replaying: () => replayState.playing,
+    replayMarkdown: () => replayState.frame?.textReportMarkdown ?? "",
   })
   const elapsedMs = createMemo(() => {
     const root = rootTranscript()
@@ -367,9 +378,11 @@ export function DeepInspectWorkbenchProvider(
         expertCount: DEEPINSPECT_MEMBERS.length,
       },
       artifacts: artifacts.artifacts,
+      fileArtifacts: fileCatalog.files(),
       textReportPath: reportFiles.text?.path,
       visualReportPath: reportFiles.visual?.path,
       ambiguities: [
+        ...fileCatalog.warnings(),
         ...nodes.ambiguities,
         ...artifacts.ambiguities,
         ...(directoryWarning ? [directoryWarning] : []),
@@ -392,6 +405,7 @@ export function DeepInspectWorkbenchProvider(
     })
   })
   const canReplay = createMemo(() => {
+    if (fileCatalog.loading()) return false
     const source = actualWorkbench()
     if (runtime.syncing() || runtime.warning() || source.agents.some((agent) => agent.status === "running")) return false
     if (!props.active() || state.loading || source.loading || source.error || running()) return false
@@ -486,16 +500,6 @@ export function DeepInspectWorkbenchProvider(
       ]
     })
   })
-  const issueCount = createMemo(() => {
-    const value = actualIssueCount()
-    if (!replayState.playing) return value
-    const path = issueArtifact()?.path
-    return path && workbench().artifacts.some((artifact) => artifact.path === path)
-      ? value
-      : value === undefined
-        ? undefined
-        : 0
-  })
   const progressPercent = createMemo(() =>
     deepInspectProgress({
       nodes: workbench().agents,
@@ -534,7 +538,7 @@ export function DeepInspectWorkbenchProvider(
     },
     executions,
     progressPercent,
-    issueCount,
+    reportLength,
     replay: {
       canReplay,
       isPreparing: () => replayState.preparing,

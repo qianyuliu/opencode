@@ -1,9 +1,10 @@
-import { createEffect, createMemo, type Accessor, type ParentProps } from "solid-js"
+import { createMemo, type Accessor, type ParentProps } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { DockApiCaseSnapshot } from "@/context/dockapi"
 import type { AgentArtifactSource } from "../agent-workbench/artifact-source"
 import { createCaseSnapshotReplay } from "../agent-workbench/snapshot-replay"
-import { buildCaseSnapshotWorkbench, findCaseSnapshotArtifact } from "../agent-workbench/snapshot"
+import { buildCaseSnapshotWorkbench } from "../agent-workbench/snapshot"
+import { createReportLength } from "../agent-workbench/report-length-context"
 import { deepTradingReplayProgressForTimestamp } from "../deeptrading/replay"
 import {
   DEEPINSPECT_ARTIFACT_ROLES,
@@ -11,7 +12,7 @@ import {
   DEEPINSPECT_MEMBERS,
   DEEPINSPECT_OPTIONAL_MEMBER_IDS,
 } from "./config"
-import { buildDeepInspectExecutions, deepInspectProgress, parseDeepInspectIssueCount } from "./data"
+import { buildDeepInspectExecutions, deepInspectProgress } from "./data"
 import { DeepInspectWorkbenchValueProvider, type DeepInspectWorkbenchContextValue } from "./workbench-context"
 
 const MEMBER_IDS = new Set(DEEPINSPECT_MEMBERS.map((member) => member.id))
@@ -38,22 +39,12 @@ export function DeepInspectSnapshotWorkbenchProvider(
     selectOverview: () => setState("selectedAgentId", "overview"),
     artifactSource: props.artifactSource,
   })
-  const issueArtifact = createMemo(() => {
-    const directory = snapshotData().discovery.runDirectory
-    return directory === undefined
-      ? undefined
-      : findCaseSnapshotArtifact(actualWorkbench().artifacts, "06-consolidated-issues.json", directory)
-  })
-
-  createEffect(() => {
-    const artifact = issueArtifact()
-    if (artifact) void props.artifactSource.load(artifact.path)
-  })
-
-  const actualIssueCount = createMemo(() => {
-    const artifact = issueArtifact()
-    const text = artifact ? props.artifactSource.get(artifact.path)?.text : undefined
-    return text === undefined ? undefined : parseDeepInspectIssueCount(text)
+  const reportLength = createReportLength({
+    scope: () => JSON.stringify([props.snapshot().caseCode, props.snapshot().capturedAt]),
+    report: () => actualWorkbench().artifacts.find((artifact) => artifact.path === actualWorkbench().textReportPath),
+    source: props.artifactSource,
+    replaying: controller.replay.isReplaying,
+    replayMarkdown: controller.replay.textReportMarkdown,
   })
   const actualExecutions = createMemo(() => {
     const current = snapshotData()
@@ -86,16 +77,6 @@ export function DeepInspectSnapshotWorkbenchProvider(
       ]
     })
   })
-  const issueCount = createMemo(() => {
-    const value = actualIssueCount()
-    if (!controller.replay.isReplaying()) return value
-    const path = issueArtifact()?.path
-    return path && controller.workbench().artifacts.some((artifact) => artifact.path === path)
-      ? value
-      : value === undefined
-        ? undefined
-        : 0
-  })
   const progressPercent = createMemo(() =>
     deepInspectProgress({
       nodes: controller.workbench().agents,
@@ -114,7 +95,7 @@ export function DeepInspectSnapshotWorkbenchProvider(
     retrySession: () => Promise.resolve(),
     executions,
     progressPercent,
-    issueCount,
+    reportLength,
     artifactSource: props.artifactSource,
     replay: controller.replay,
   }

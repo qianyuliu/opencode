@@ -80,6 +80,8 @@ export type AgentWorkbench = {
   nestedAgentSessionsError?: string
   stats: AgentWorkbenchStats
   artifacts: SessionArtifact[]
+  // Full file-tab inventory; report candidates remain in artifacts.
+  fileArtifacts?: SessionArtifact[]
   textReportPath?: string
   visualReportPath?: string
   ambiguities: string[]

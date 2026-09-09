@@ -275,6 +275,11 @@ for (const input of cases) {
     const state = await prepare(page, input)
     await expect(page.getByRole("button", { name: "分析团队", exact: true })).toBeVisible()
     await expect(page.getByText(`${input.experts} 位`, { exact: true })).toBeVisible()
+    if (["government", "inspection"].includes(input.category)) {
+      await expect(page.getByText("报告篇幅", { exact: true }).locator("..").locator("strong")).toHaveText("17字")
+      await expect(page.getByText(input.category === "government" ? "公开来源" : "问题线索", { exact: true })).toHaveCount(0)
+      expect(state.fileRequests.filter((path) => path.endsWith("20-report.md"))).toHaveLength(1)
+    }
     if (input.category === "recommendation") {
       const dag = page.locator('section[aria-label="推荐分析 DAG"]')
       await expect(dag.locator("button")).toHaveCount(5)
@@ -332,9 +337,15 @@ for (const input of cases) {
     expect((await download).suggestedFilename()).toBeTruthy()
     await page.getByRole("button", { name: "看回放", exact: true }).click()
     await expect(page.getByRole("button", { name: "停止回放", exact: true })).toBeVisible()
+    if (["government", "inspection"].includes(input.category)) {
+      await expect(page.getByText("报告篇幅", { exact: true }).locator("..").locator("strong")).toHaveText("0字")
+    }
     await expect(page.getByRole("button", { name: "做同款", exact: true })).toHaveCount(0)
     await page.getByRole("button", { name: "停止回放", exact: true }).click()
     await expect(page.getByRole("button", { name: "做同款", exact: true })).toBeVisible()
+    if (["government", "inspection"].includes(input.category)) {
+      await expect(page.getByText("报告篇幅", { exact: true }).locator("..").locator("strong")).toHaveText("17字")
+    }
     await page.getByRole("button", { name: "隐藏左栏", exact: true }).click()
     await page.setViewportSize({ width: 390, height: 844 })
     await page.getByRole("button", { name: "分析结果", exact: true }).click()
@@ -391,8 +402,13 @@ test("snapshot report failure shows an error without repeated fetches", async ({
   const state = await prepare(page, cases[1], { fileError: true })
   await page.getByRole("button", { name: "文字报告", exact: true }).click()
   await expect(page.getByText("文字报告读取失败", { exact: true })).toBeVisible()
+  const reads = state.fileRequests.filter((path) => path.endsWith("20-report.md")).length
+  expect(reads).toBeGreaterThanOrEqual(1)
+  expect(reads).toBeLessThanOrEqual(2) // Metric prefetch and an explicit report-tab open may each attempt a read.
   await page.waitForTimeout(1000)
-  expect(state.fileRequests.filter((path) => path.endsWith("20-report.md"))).toHaveLength(1)
+  expect(state.fileRequests.filter((path) => path.endsWith("20-report.md"))).toHaveLength(reads)
+  await page.getByRole("button", { name: "分析团队", exact: true }).click()
+  await expect(page.getByText("报告篇幅", { exact: true }).locator("..").locator("strong")).toHaveText("--")
   expect(state.errors).toEqual([])
 })
 
@@ -425,10 +441,13 @@ test("replay catches up, respects manual tabs and restores the completed snapsho
   const state = await prepare(page, cases[1])
   await page.clock.install()
   await page.getByRole("button", { name: "看回放", exact: true }).click()
+  await expect(page.getByText("报告篇幅", { exact: true }).locator("..").locator("strong")).toHaveText("0字")
   await page.getByRole("button", { name: "文件", exact: true }).click()
   await page.clock.fastForward(57000)
   await expect(page.getByRole("button", { name: "文件", exact: true })).toHaveAttribute("data-selected", "")
   await expect(page.getByRole("button", { name: "停止回放", exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "分析团队", exact: true }).click()
+  await expect(page.getByText("报告篇幅", { exact: true }).locator("..").locator("strong")).toHaveText("17字")
   await page.clock.fastForward(4000)
   await expect(page.getByRole("button", { name: "看回放", exact: true })).toBeVisible()
   await expect(page.getByRole("button", { name: "做同款", exact: true })).toBeVisible()

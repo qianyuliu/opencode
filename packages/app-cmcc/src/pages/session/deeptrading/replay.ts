@@ -5,6 +5,7 @@ import type {
   SessionArtifact,
 } from "../agent-workbench/model"
 import type { SearchUrlEvent } from "../agent-workbench/statistics"
+import { workbenchFiles } from "../agent-workbench/artifact-files"
 
 export const DEEPTRADING_REPLAY_DURATION_MS = 60_000
 
@@ -18,7 +19,7 @@ type ReplayCuePayload =
   | { at: number; type: "agent-block"; agentId: string; content: string }
   | { at: number; type: "agent-finish"; agentId: string }
   | { at: number; type: "search-urls"; urls: string[] }
-  | { at: number; type: "artifact"; artifact: SessionArtifact }
+  | { at: number; type: "artifact"; artifact: SessionArtifact; fileOnly: boolean }
   | { at: number; type: "text-report-start"; path: string }
   | { at: number; type: "text-report-block"; content: string }
   | { at: number; type: "visual-report"; path: string }
@@ -98,11 +99,14 @@ export function compileDeepTradingReplay(input: {
     }),
   )
 
-  source.artifacts.forEach((artifact, index) =>
+  const reportPaths = new Set(source.artifacts.map((artifact) => artifact.path))
+  const files = workbenchFiles(source)
+  files.forEach((artifact, index) =>
     push({
-      at: spreadPosition(index, source.artifacts.length, 0.66, 0.74),
+      at: spreadPosition(index, files.length, 0.66, 0.74),
       type: "artifact",
       artifact,
+      fileOnly: !reportPaths.has(artifact.path),
     }),
   )
 
@@ -125,7 +129,7 @@ export function compileDeepTradingReplay(input: {
     cues: cues.sort((left, right) => left.at - right.at || left.sequence - right.sequence),
     sourceStartAt,
     sourceEndAt,
-    hasFiles: source.artifacts.length > 0,
+    hasFiles: files.length > 0,
     hasTextReport: !!source.textReportPath,
     hasVisualReport: !!source.visualReportPath,
   } satisfies DeepTradingReplayTimeline
@@ -149,6 +153,7 @@ export function createDeepTradingReplayFrame(timeline: DeepTradingReplayTimeline
         expertCount: timeline.source.stats.expertCount,
       },
       artifacts: [],
+      ...(timeline.source.fileArtifacts ? { fileArtifacts: [] } : {}),
       textReportPath: undefined,
       visualReportPath: undefined,
       loading: false,
@@ -294,10 +299,14 @@ function applyReplayCue(
     return { ...frame, seenSearchUrls: [...new Set([...frame.seenSearchUrls, ...cue.urls])] }
   }
   if (cue.type === "artifact") {
-    if (frame.workbench.artifacts.some((artifact) => artifact.path === cue.artifact.path)) return frame
+    if (workbenchFiles(frame.workbench).some((artifact) => artifact.path === cue.artifact.path)) return frame
     return {
       ...frame,
-      workbench: { ...frame.workbench, artifacts: [...frame.workbench.artifacts, cue.artifact] },
+      workbench: {
+        ...frame.workbench,
+        artifacts: cue.fileOnly ? frame.workbench.artifacts : [...frame.workbench.artifacts, cue.artifact],
+        ...(timeline.source.fileArtifacts ? { fileArtifacts: [...workbenchFiles(frame.workbench), cue.artifact] } : {}),
+      },
     }
   }
   if (cue.type === "text-report-start") {

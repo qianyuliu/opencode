@@ -10,8 +10,8 @@ import {
   CMCC_CASE_CATEGORIES,
   cmccCaseCategoryByCode,
   cmccCaseManagementAllowed,
-  formatCaseCharacterCount,
 } from "@/utils/cmcc-cases"
+import { cmccHistoryProduct } from "@/utils/cmcc-history-product"
 import caseCategoryAssetsUrl from "@/assets/cases/case-category-assets.svg?url"
 
 type SortOrder = "latest" | "oldest"
@@ -290,9 +290,10 @@ function OverviewGroups(props: {
     >
       <Show when={general()?.items.length}>
         <CaseSectionHeading category="deep-research" />
-        <section class="relative mt-3 inline-block max-w-full overflow-hidden rounded-[8px] max-md:w-full">
+        <section data-case-group="deep-research" class="relative mt-3 inline-block max-w-full overflow-hidden rounded-[8px] max-md:w-full">
           <CaseCategoryBackground category="deep-research" />
           <div
+            data-case-cards
             class="relative z-10 grid grid-flow-col gap-4 px-7 py-5 max-md:grid-flow-row max-md:grid-cols-2 max-sm:grid-cols-1"
             style={{ "grid-auto-columns": "var(--case-card-width)" }}
           >
@@ -312,14 +313,17 @@ function OverviewGroups(props: {
         <For each={others()}>
           {(group) => {
             const category = () => cmccCaseCategoryByCode(group.category)
+            const wide = () => group.category === "science"
             return (
-              <section>
+              <section class={wide() ? "col-span-2 max-md:col-span-1" : undefined}>
                 <div
+                  data-case-group={group.category}
                   class="relative inline-block max-w-full overflow-hidden rounded-[8px] max-sm:w-full"
+                  classList={{ "max-md:w-full": wide() }}
                   style={{ background: category()?.tone ?? "#f4f6fb" }}
                 >
                   <CaseCategoryBackground category={group.category} />
-                  <div class="relative z-10 flex flex-col px-4 pb-4 pt-3">
+                  <div class="relative z-10 flex flex-col pb-4 pt-3" classList={{ "px-7": wide(), "px-4": !wide() }}>
                     <div class="flex h-6 items-center justify-between gap-4">
                       <CaseCategoryTitle category={group.category} label={category()?.label ?? group.category} />
                       <button
@@ -332,7 +336,9 @@ function OverviewGroups(props: {
                       </button>
                     </div>
                     <div
-                      class="mt-2 grid grid-flow-col gap-3 max-sm:grid-flow-row max-sm:grid-cols-1"
+                      data-case-cards
+                      class="mt-2 grid grid-flow-col max-sm:grid-flow-row max-sm:grid-cols-1"
+                      classList={{ "gap-4 max-md:grid-flow-row max-md:grid-cols-2": wide(), "gap-3": !wide() }}
                       style={{ "grid-auto-columns": "var(--case-card-width)" }}
                     >
                       <For each={group.items}>
@@ -398,8 +404,9 @@ function CaseSectionHeading(props: { category: string }) {
 
 function CaseCard(props: { item: DockApiCaseSummary; onClick: () => void; onDelete?: () => void }) {
   const [state, setState] = createStore({ coverFailed: false })
+  const product = () => cmccHistoryProduct(props.item.agentType)
   return (
-    <div class="group relative min-w-0 text-left">
+    <div data-case-card={props.item.caseCode} class="group relative min-w-0 text-left">
       <button type="button" class="block w-full text-left" onClick={props.onClick}>
         <div class="overflow-hidden rounded-[8px] border border-[#e9edf5] bg-white shadow-[0_4px_12px_rgba(61,77,112,0.08)] transition-[transform,box-shadow] duration-150 group-hover:-translate-y-0.5 group-hover:shadow-[0_8px_18px_rgba(61,77,112,0.13)]">
           <div
@@ -418,14 +425,19 @@ function CaseCard(props: { item: DockApiCaseSummary; onClick: () => void; onDele
                 onError={() => setState("coverFailed", true)}
               />
             </Show>
-            <span class="absolute bottom-2 left-2 max-w-[calc(100%-16px)] truncate rounded-[5px] bg-white/90 px-2 py-1 text-[11px] text-[#5d6679] shadow-[0_1px_4px_rgba(38,52,82,0.08)] backdrop-blur-sm">
+            <span
+              data-slot="case-category-label"
+              class="absolute bottom-2 left-2 max-w-[min(104px,calc(100%-16px))] truncate rounded-full border border-[#e1e6ef] bg-[#f0f2f8] px-1.5 py-0.5 text-[11px] font-normal leading-[1.4] text-[#5d6679]"
+              title={props.item.caseTag}
+              style={{
+                color: product()?.textColor,
+                background: product()?.backgroundColor,
+                "border-color": product()?.borderColor,
+              }}
+            >
               {props.item.caseTag}
             </span>
           </div>
-        </div>
-        <div class="mt-2 flex items-center justify-between gap-2 px-1 text-[11px] text-[#8e96a8]">
-          <span>报告&nbsp;&nbsp;{formatCaseCharacterCount(props.item.reportCharCount)}</span>
-          <span class="shrink-0">{formatCaseDate(props.item.publishedAt)}</span>
         </div>
       </button>
       <Show when={props.onDelete}>
@@ -480,13 +492,6 @@ function CaseSkeletons() {
       </For>
     </div>
   )
-}
-
-function formatCaseDate(value: string) {
-  const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) return ""
-  const pad = (part: number) => String(part).padStart(2, "0")
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
 export { CmccCaseDetailRoute } from "./cases/case-detail"
