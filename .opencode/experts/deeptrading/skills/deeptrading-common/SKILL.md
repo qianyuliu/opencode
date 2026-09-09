@@ -13,7 +13,7 @@ description: DeepTrading A股投研专家团 通用工作规范——编码约�
 
 ## 编码规范
 
-所有 workspace 文件（`.md`、`.html`、`.json`）使用 **UTF-8 with BOM** 编码写入。最终报告文件（`final-report.md`、`visual-report.json`、`report.html`）使用 **UTF-8 无 BOM**。
+所有 workspace 文件（`.md`、`.html`、`.json`）使用 **UTF-8 with BOM** 编码写入。最终报告文件（`30-final-report.md`、`35-visual-report.json`、`40-report.html`）使用 **UTF-8 无 BOM**。
 
 ## 免责声明（硬性）
 
