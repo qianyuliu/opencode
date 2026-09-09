@@ -418,11 +418,11 @@ function ExpertDetailDialog(props: {
             </Show>
           </div>
 
-          <footer class="flex h-[68px] shrink-0 items-center justify-between border-t border-[#edf0f7] px-6 shadow-[0_-5px_16px_rgba(52,42,89,0.04)]">
+          <footer class="flex h-[68px] shrink-0 items-center justify-end gap-3 border-t border-[#edf0f7] px-6 shadow-[0_-5px_16px_rgba(52,42,89,0.04)]">
             <Show when={props.expert.id === "shoppers-pro"}>
               <button
                 type="button"
-                class="flex h-9 items-center gap-1.5 rounded-[8px] border border-[#d7def7] bg-[#f8f9ff] px-4 text-[13px] font-medium text-[#5b4cff] transition hover:border-[#c4cff7] hover:bg-[#f0f2ff]"
+                class="mr-auto flex h-9 items-center gap-1.5 rounded-[8px] border border-[#d7def7] bg-[#f8f9ff] px-4 text-[13px] font-medium text-[#5b4cff] transition hover:border-[#c4cff7] hover:bg-[#f0f2ff]"
                 onClick={() => setShowDemo(true)}
               >
                 <svg class="size-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-linecap="square">
