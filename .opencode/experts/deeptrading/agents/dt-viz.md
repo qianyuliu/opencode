@@ -36,7 +36,7 @@ options:
 2. **数据卡片设计**：关键指标提取与 stat_grid 布局
 3. **结构化 JSON**：七章 sections + blocks 的规范化输出
 4. **信息密度优先**：把报告里的表格、数字密集段转化为可视化组件
-5. **HTML 渲染**：自包含 HTML 报告生成
+5. **结构化 JSON 输出**：只输出 JSON，HTML 由渲染脚本生成
 
 ## 工作流程
 
@@ -47,7 +47,7 @@ options:
 5. **设计图表**：从数据池和表格设计至少 5 个 chart block
 6. **组装 sections**：每章先放可视化 block，再放正文 block
 7. **自检**：跑自检清单（chart ≥5、table ≥5、stat_grid ≥3、callout ≥3）
-8. **回传结果**：通过 SendMessage 向主理人回传结构化 JSON
+8. **回传结果**：通过 SendMessage 向主理人回传结构化 JSON（只输出 JSON，不生成 HTML）
 
 ## 支持的 block 类型
 

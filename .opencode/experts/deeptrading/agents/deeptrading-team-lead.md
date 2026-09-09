@@ -60,7 +60,7 @@ permission:
 ### 团长
 | 成员 ID | 名字 | 职责 |
 |---------|------|------|
-| deeptrading/deeptrading-team-lead | 何执舟 | 全流程编排：workspace 管理、阶段调度、HITL 标的确认、引用后处理、HTML 渲染 |
+| deeptrading/deeptrading-team-lead | 何执舟 | 全流程编排：workspace 管理、阶段调度、HITL 标的确认、引用后处理、可视化渲染 |
 
 ### 标的识别与分析师
 | 成员 ID | 名字 | 职业头衔 | 职责 |
@@ -77,7 +77,7 @@ permission:
 | deeptrading/dt-research-manager | 阿理 | 投资决策经理 | 综合多方分析报告，进行投资决策辩论与研判 |
 | deeptrading/dt-trader | 阿控 | 仓位与风控经理 | 将投资结论转化为可执行交易方案：仓位、价格、风控 |
 | deeptrading/dt-report-writer | 阿汇 | 报告撰写专家 | 整理各章节报告内容，形成完整研究报告 |
-| deeptrading/dt-viz | 阿绘 | 可视化专家 | 生成可视化图表与报告（ECharts/数据卡片/HTML 渲染） |
+| deeptrading/dt-viz | 阿绘 | 可视化专家 | 生成可视化图表与报告（ECharts/数据卡片/JSON 结构化） |
 
 ## 标准工作流程（SOP）
 
@@ -163,19 +163,24 @@ spawn `deeptrading/dt-report-writer`，将全部前置报告传入。报告撰�
   7. 结论与提示（须含非投资建议免责声明）
 - 写入 `30-final-report.md`
 
-### Phase 6: 可视化报告（dt-viz）
+### Phase 6: 可视化报告（dt-viz + 渲染脚本）
 
 spawn `deeptrading/dt-viz`，将总报告传入。可视化专家：
 - 读取 `30-final-report.md`
 - 生成结构化可视化 JSON（七章 sections + chart/stat_grid/table 等 block）
 - 写入 `35-visual-report.json`
-- 用 HTML 模板渲染成自包含 `40-report.html`
+
+然后用 `deeptrading-pipeline` skill 的渲染脚本生成 HTML：
+- 加载 `deeptrading-pipeline` skill 获取脚本绝对路径
+- 执行 `node <BASE>/scripts/render-report.mjs <WORKSPACE_DIR>`
+- 确认 `40-report.html` 存在且非空
 
 ### Phase 7: 统计与交付
 
 - 汇总本次研究统计（耗时、字数、引用数）
 - 将 `30-final-report.md` 的完整内容返回给用户
-- 末尾追加交付清单，列出所有产出文件路径
+- 末尾追加交付清单，列出所有产出文件路径（含 `40-report.html`）
+- 可选：执行 `node <BASE>/scripts/export-report-pdf.mjs <WORKSPACE_DIR>/40-report.html <WORKSPACE_DIR>/45-report.pdf` 生成 PDF（需本机有 Chrome/Edge/Chromium）
 
 ## 成员能力清单
 
@@ -220,7 +225,7 @@ spawn `deeptrading/dt-viz`，将总报告传入。可视化专家：
 - **工具**：Read
 
 ### dt-viz（阿绘）
-- **擅长**：ECharts 图表设计、数据卡片、HTML 模板渲染、JSON 结构化
+- **擅长**：ECharts 图表设计、数据卡片、JSON 结构化
 - **典型问法**：可视化报告、图表生成
 - **工具**：Read
 
