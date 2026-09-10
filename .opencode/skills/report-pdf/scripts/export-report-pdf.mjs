@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
-import { access, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { access, mkdtemp, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const CJK_SAMPLE = "产业洞察报告字体校验";
 const FONT_FAMILY = "OpenCode Report CJK";
@@ -178,7 +178,18 @@ async function installAndVerifyFont(client, sessionId, font) {
       await new Promise(function(done){setTimeout(done,500);});
       const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
       let node;
-      while((node=walker.nextNode())){if(/[\\u3400-\\u9fff]/.test(node.nodeValue||"")){window.__REPORT_PDF_CJK_NODE__=node;break;}}
+      while((node=walker.nextNode())){
+        if(!/[\\u3400-\\u9fff]/.test(node.nodeValue||"")) continue;
+        const parent=node.parentElement;
+        if(!parent||["SCRIPT","STYLE","NOSCRIPT","TEMPLATE"].includes(parent.tagName)) continue;
+        const computed=getComputedStyle(parent);
+        if(computed.display==="none"||computed.visibility!=="visible"||computed.opacity==="0") continue;
+        const range=document.createRange();
+        range.selectNodeContents(node);
+        if(!Array.from(range.getClientRects()).some(function(rect){return rect.width>0&&rect.height>0;})) continue;
+        window.__REPORT_PDF_CJK_NODE__=node;
+        break;
+      }
       return {ok:true,hasCjk:Boolean(node)};
     })()`,
     awaitPromise: true,
@@ -259,7 +270,10 @@ class CdpClient {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (
+  process.argv[1] &&
+  fileURLToPath(import.meta.url) === await realpath(resolve(process.argv[1])).catch(() => resolve(process.argv[1]))
+) {
   await exportReportPdf({
     input: process.argv[2],
     output: process.argv[3],
