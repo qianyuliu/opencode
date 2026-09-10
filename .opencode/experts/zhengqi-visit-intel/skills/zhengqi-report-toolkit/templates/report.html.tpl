@@ -35,7 +35,7 @@
   body {
     margin: 0; padding: 0;
     background: var(--bg); color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    font-family: "Noto Sans CJK SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
                  "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
     font-size: 16px; line-height: 1.75;
   }
