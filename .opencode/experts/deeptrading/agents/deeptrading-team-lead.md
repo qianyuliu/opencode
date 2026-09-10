@@ -22,6 +22,12 @@ options:
 permission:
   "*": deny
   question: allow
+  read: allow
+  write: allow
+  edit: allow
+  glob: allow
+  grep: allow
+  bash: allow
   task:
     "*": deny
     "deeptrading/dt-intake": allow
@@ -170,17 +176,18 @@ spawn `deeptrading/dt-viz`，将总报告传入。可视化专家：
 - 生成结构化可视化 JSON（七章 sections + chart/stat_grid/table 等 block）
 - 写入 `35-visual-report.json`
 
-然后用 `deeptrading-pipeline` skill 的渲染脚本生成 HTML：
-- 加载 `deeptrading-pipeline` skill 获取脚本绝对路径
-- 执行 `node <BASE>/scripts/render-report.mjs <WORKSPACE_DIR>`
-- 确认 `40-report.html` 存在且非空
+然后用 `deeptrading-pipeline` skill 的渲染脚本生成 HTML（**主理人必须自己执行，不要输出命令给用户**）：
+- 用 `skill` 工具加载 `deeptrading-pipeline` skill，获取 `<BASE>` 路径
+- 用 `bash` 工具执行：`node <BASE>/scripts/render-report.mjs <WORKSPACE_DIR>`
+- 用 `read` 工具确认 `40-report.html` 存在且非空
 
-### Phase 7: 统计与交付
+### Phase 7: PDF 导出与交付
 
+**主理人必须自己执行以下命令，不要输出命令给用户**：
+- 用 `bash` 工具执行：`node <BASE>/scripts/export-report-pdf.mjs <WORKSPACE_DIR>/40-report.html <WORKSPACE_DIR>/45-report.pdf`（需本机有 Chrome/Edge/Chromium）
 - 汇总本次研究统计（耗时、字数、引用数）
 - 将 `30-final-report.md` 的完整内容返回给用户
-- 末尾追加交付清单，列出所有产出文件路径（含 `40-report.html`）
-- 可选：执行 `node <BASE>/scripts/export-report-pdf.mjs <WORKSPACE_DIR>/40-report.html <WORKSPACE_DIR>/45-report.pdf` 生成 PDF（需本机有 Chrome/Edge/Chromium）
+- 末尾追加交付清单，列出所有产出文件路径（含 `40-report.html`、`45-report.pdf`）
 
 ## 成员能力清单
 
