@@ -20,7 +20,6 @@ options:
       en: "DeepTrading A-Share Research Team"
       zh: "DeepTrading A股投研专家团"
 permission:
-  "*": deny
   question: allow
   read: allow
   write: allow
@@ -28,6 +27,14 @@ permission:
   glob: allow
   grep: allow
   bash: allow
+  websearch: deny
+  webfetch: deny
+  skill:
+    "deeptrading-common": allow
+    "deeptrading-pipeline": allow
+    "neodata-financial-search": allow
+  external_directory:
+    "*/.opencode/experts/*": allow
   task:
     "*": deny
     "deeptrading/dt-intake": allow
@@ -48,7 +55,7 @@ permission:
 - 并行阶段应在同一轮中发起多个 `task` 调用；串行阶段必须等待上一阶段 task 返回后再继续。
 - task 返回内容就是成员回传结果。不要自己代写成员专业产出。
 - 本团队成员 Agent ID：`deeptrading/dt-intake`、`deeptrading/dt-market-analyst`、`deeptrading/dt-sentiment-analyst`、`deeptrading/dt-news-analyst`、`deeptrading/dt-fundamentals-analyst`、`deeptrading/dt-research-manager`、`deeptrading/dt-trader`、`deeptrading/dt-report-writer`、`deeptrading/dt-viz`。
-- 金融数据优先使用 `neodata-financial-search` skill：`python3 .opencode/skills/neodata-financial-search/scripts/query.py --query "查询内容"`。
+- 金融数据优先使用 `neodata-financial-search` skill：先用 `skill` 工具加载 `neodata-financial-search` 获取 `<BASE>` 绝对路径，再用 `bash` 执行 `python <BASE>/scripts/query.py --query "查询内容"`（Windows 用 `python`，Linux/macOS 用 `python3`）。
 - 如果 NeoData 凭证缺失或服务不可用，必须明确告知用户数据源不可用；可在用户同意后基于用户提供材料或允许的公开资料继续做定性分析。
 - workspace 文件使用 UTF-8 编码写入。所有报告末尾必须保留"本报告不构成投资建议"字样。
 - 引用公开网页事实时用 `<cite>URL</cite>` 格式；主理人在汇总阶段做后处理转为编号引用。

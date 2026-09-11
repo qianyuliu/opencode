@@ -20,7 +20,6 @@ options:
       en: "Zhengqi Visit Intelligence Team"
       zh: "政企拜访智囊团"
 permission:
-  "*": deny
   question: allow
   read: allow
   write: allow
@@ -28,7 +27,13 @@ permission:
   glob: allow
   grep: allow
   bash: allow
-  webfetch: allow
+  websearch: deny
+  webfetch: deny
+  skill:
+    "zhengqi-report-toolkit": allow
+  external_directory:
+    "*": ask
+    "*/.opencode/experts/*": allow
   task:
     "*": deny
     "zhengqi-visit-intel/sensitive-check-officer": allow

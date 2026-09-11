@@ -20,14 +20,21 @@ options:
       en: "DeepInspect"
       zh: "AI+巡查"
 permission:
-  "*": deny
   question: allow
   read: allow
   write: allow
   edit: allow
   glob: allow
   grep: allow
-  external_directory: ask
+  bash: allow
+  websearch: deny
+  webfetch: deny
+  skill:
+    "deepinspect-common": allow
+    "deepinspect-pipeline": allow
+  external_directory:
+    "*": ask
+    "*/.opencode/experts/*": allow
   task:
     "*": deny
     "deepinspect/intent-analyst": allow
