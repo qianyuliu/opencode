@@ -21,4 +21,6 @@ node scripts/export-report-pdf.mjs <input.html> [output.pdf]
 
 已有专家团可保留自己的 `export-report-pdf.mjs` 入口，但入口只能配置文件名和品牌文字，渲染逻辑统一委托给本脚本。新增专家团不要复制 CDP 导出实现。
 
+入口可通过 `pageChecks` 注册团队特有的导出前闸门：数组，每项 `{ name, expression }`；`expression` 为在页面上求值的 JS 表达式（通常是 IIFE，返回问题数组或字符串），在中文字体注入并验证之后、打印之前执行，返回非空结果即中止导出。适合正文污染检查、图表标签质量检查等业务校验。
+
 PDF 导出成功不替代视觉验收。正式交付前仍需渲染全部页面，检查文字、图表、分页和页眉页脚。

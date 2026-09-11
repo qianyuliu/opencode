@@ -42,6 +42,7 @@ export async function exportReportPdf(options) {
     await client.send("Page.navigate", { url: pathToFileURL(input).href }, attached.sessionId);
     await waitForReport(client, attached.sessionId);
     const fontAudit = await installAndVerifyFont(client, attached.sessionId, font);
+    await runPageChecks(client, attached.sessionId, options.pageChecks);
 
     const result = await client.send("Page.printToPDF", {
       displayHeaderFooter: true,
@@ -208,6 +209,24 @@ async function installAndVerifyFont(client, sessionId, font) {
     throw new Error(`中文节点未使用指定中文字体，实际字体：${fonts.map((item) => item.familyName).join("、") || "无"}`);
   }
   return [...new Set(fonts.map((item) => item.familyName))];
+}
+
+async function runPageChecks(client, sessionId, checks) {
+  for (const check of checks ?? []) {
+    if (!check?.name || !check?.expression) continue;
+    const result = await client.send("Runtime.evaluate", {
+      expression: check.expression,
+      awaitPromise: true,
+      returnByValue: true
+    }, sessionId);
+    const value = result.result?.value;
+    const problems = Array.isArray(value)
+      ? value.filter((item) => item !== null && item !== undefined && item !== "")
+      : typeof value === "string" && value.trim()
+        ? [value.trim()]
+        : [];
+    if (problems.length) throw new Error(`${check.name}未通过：${problems.join("；")}`);
+  }
 }
 
 function headerTemplate(label) {
